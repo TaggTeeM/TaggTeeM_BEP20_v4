@@ -328,7 +328,10 @@ contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, Pausable, AccessControl, ERC
     view 
     returns (bool ConfirmWhale) {
         // whaleThreshold of 0 turns off whales
-        return _whaleThreshold == 0 || Amount.div(totalSupply()) > _whaleThreshold;
+        if (_whaleThreshold == 0)
+            return false;
+        else
+            return Amount.div(totalSupply()) > _whaleThreshold;
     }
 
     function isWhale(address Holder) 
