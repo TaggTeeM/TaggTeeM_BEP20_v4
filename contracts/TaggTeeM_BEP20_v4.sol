@@ -5,14 +5,14 @@
 pragma solidity ^0.8.0;
 // SPDX-License-Identifier: Unlicensed
 
-import "../openzeppelin/contracts/token/ERC20/ERC20.sol";
-import "../openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
-import "../openzeppelin/contracts/security/Pausable.sol";
-import "../openzeppelin/contracts/access/AccessControl.sol";
-import "../openzeppelin/contracts/access/Ownable.sol";
-import "../openzeppelin/contracts/token/ERC20/extensions/draft-ERC20Permit.sol";
-import "../openzeppelin/contracts/token/ERC20/extensions/ERC20Votes.sol";
-import "../openzeppelin/contracts/utils/math/SafeMath.sol";
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
+import "@openzeppelin/contracts/security/Pausable.sol";
+import "@openzeppelin/contracts/access/AccessControl.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/token/ERC20/extensions/draft-ERC20Permit.sol";
+import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Votes.sol";
+import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 
 import "./Libraries/ABDKMathQuad.sol";
 
@@ -206,12 +206,12 @@ contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, Pausable, AccessControl, ERC
     /// @param from The address to transfer from.
     /// @param to The address to transfer to.
     /// @param value The amount of coin to send to the provided address.
-    /// @return Whether the transfer was a success.
+    /// return Whether the transfer was a success.
     function _transfer(address from, address to, uint256 value)
     override
     internal
     whenNotPaused
-    returns (bool)
+    //returns (bool)
     {
         bool isFounderTransfer = false;
         uint balance = balanceOf(from);
@@ -240,14 +240,14 @@ contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, Pausable, AccessControl, ERC
         }
 
         // require that transaction completes successfully
-        require(super._transfer(from, to, value));
+        super._transfer(from, to, value);
 
         // record the founder coin transfer
         if (isFounderTransfer || _founderCoinBalances[from] > 0)
             _founderCoinBalances[from] = _founderCoinBalances[from] < value ? 0 : _founderCoinBalances[from] - value;
             //FounderBonusSalesExpirations[_msgSender()] = block.timestamp + _founderBonusRestrictionTimeline; 
 
-        return true;
+        //return true;
     }
 
     /// @notice Transfers _value amount of coins to the provided address with appropriate holder restrictions.
@@ -317,6 +317,7 @@ contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, Pausable, AccessControl, ERC
 
     function getTotalFounderCoins()
     public
+    view
     onlyRole(FOUNDER_ROLE)
     returns (uint)
     {
@@ -476,7 +477,6 @@ contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, Pausable, AccessControl, ERC
     */
     function getNonvolumetricMaximum(address Holder) 
     public 
-    view 
     returns (uint) 
     {
         // TODO: turn off maximum for _tokenCreator and OWNER_ROLE?
