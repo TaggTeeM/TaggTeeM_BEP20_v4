@@ -4,3 +4,5 @@
 
 /.vs
 contracts/artifacts/
+/contracts/models/artifacts
+/libraries/artifacts

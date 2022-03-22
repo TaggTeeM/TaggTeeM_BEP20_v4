@@ -25,11 +25,14 @@ contract ExpirableTransactionsTracker {
     public
     returns (bool)
     {
-        uint currentTimestamp = block.timestamp;
+        if (timelineOffset > 0)
+        {
+            uint currentTimestamp = block.timestamp;
 
-        ActiveTransactions[from] = true;
-        Transactions[from].ActiveTimestamps.push(currentTimestamp + timelineOffset);
-        Transactions[from].TxTimestamps[currentTimestamp] += amount;
+            ActiveTransactions[from] = true;
+            Transactions[from].ActiveTimestamps.push(currentTimestamp + timelineOffset);
+            Transactions[from].TxTimestamps[currentTimestamp] += amount;
+        }
 
         return true;
     }
