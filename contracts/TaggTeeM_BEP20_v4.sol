@@ -71,7 +71,7 @@ contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, Pausable, AccessControl, ERC
     ExpirableTransactionsTracker private _activeHolderRestrictions;
     ExpirableTransactionsTracker private _activeSales;
 
-    constructor () ERC20("TaggTeeM_TEST02", "TTM2") ERC20Permit("TaggTeeM_TEST02") {
+    constructor () ERC20("TaggTeeM_TEST03", "TTM3") ERC20Permit("TaggTeeM_TEST03") {
         // grant token creator some basic permissions
         _grantRole(DEFAULT_ADMIN_ROLE, _msgSender());
         grantRole(MINTER_ROLE, _msgSender());
@@ -1094,21 +1094,12 @@ contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, Pausable, AccessControl, ERC
     internal
     returns (uint)
     {
-                // add sales tracker to balance for whale/nonvolumetric checks
+        // add sales tracker to balance for whale/nonvolumetric checks
         uint balance = balanceOf(account) + _activeSales.getUnexpiredTransactions(account);
 
         if (!isWhale(balance))
             return balance;
         else
-        {
-            /*
-            bytes16 quadDivisor = ABDKMathQuad.fromUInt(_nonvolumetricSettingsDivisor);
-
-            bytes16 maximumSpend = ABDKMathQuad.add(ABDKMathQuad.mul(ABDKMathQuad.div(ABDKMathQuad.fromInt(_nonvolumetricA), quadDivisor), ABDKMathQuad.ln(ABDKMathQuad.mul(ABDKMathQuad.fromUInt(balance), ABDKMathQuad.div(ABDKMathQuad.fromInt(_nonvolumetricK), quadDivisor)))), ABDKMathQuad.div(ABDKMathQuad.fromInt(_nonvolumetricB), quadDivisor));
-
-            return ABDKMathQuad.toUInt(maximumSpend);
-            */
             return Algorithms.LogarithmicAlgoNatural(balance, _nonvolumetricSettingsDivisor, _nonvolumetricA, _nonvolumetricB, _nonvolumetricK);
-        }
     }
 }
