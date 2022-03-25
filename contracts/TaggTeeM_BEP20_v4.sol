@@ -14,7 +14,7 @@ import "@openzeppelin/contracts/token/ERC20/extensions/draft-ERC20Permit.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Votes.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 
-import "./models/ExpirableTransactionsTracker.sol";
+import "./models/Depository.sol";
 import "../libraries/Algorithms.sol";
 
 ///
@@ -22,7 +22,7 @@ import "../libraries/Algorithms.sol";
 ///
 /// @author John Daugherty
 ///
-contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, Pausable, AccessControl, ERC20Permit, ERC20Votes, Ownable {
+contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, Pausable, AccessControl, ERC20Permit, ERC20Votes, Ownable, Depository {
     using SafeMath for uint;
 
     // roles
@@ -36,6 +36,7 @@ contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, Pausable, AccessControl, ERC
     bytes32 public constant RESTRICTION_ADMIN = keccak256("RESTRICTION_ADMIN");
     bytes32 public constant IFC_TAX_ADMIN = keccak256("IFC_TAX_ADMIN");
     bytes32 public constant SALES_HISTORY_ADMIN = keccak256("SALES_HISTORY_ADMIN");
+    bytes32 public constant LOCKBOX_ADMIN = keccak256("LOCKBOX_ADMIN");
 
     // keep track of how much is in public supply
     uint private _totalPublicSupply;
@@ -68,10 +69,18 @@ contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, Pausable, AccessControl, ERC
     uint private _ifcTaxAmount = 1; // 1%
 
     // restriction trackers
-    ExpirableTransactionsTracker private _activeHolderRestrictions;
-    ExpirableTransactionsTracker private _activeSales;
+    //ExpirableTransactionsTracker private _activeHolderRestrictions;
+    //ExpirableTransactionsTracker private _activeSales;
+    //Depository private _lockboxDepository;
+    mapping (address => uint) private _lastTransferDate;
+    mapping (address => uint) private _transferTotals;
 
-    constructor () ERC20("TaggTeeM_TEST03", "TTM3") ERC20Permit("TaggTeeM_TEST03") {
+    event Logger (
+        uint256 date,
+        string value
+    );
+
+    constructor () ERC20("TaggTeeM", "TTM") ERC20Permit("TaggTeeM") {
         // grant token creator some basic permissions
         _grantRole(DEFAULT_ADMIN_ROLE, _msgSender());
         grantRole(MINTER_ROLE, _msgSender());
@@ -90,13 +99,15 @@ contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, Pausable, AccessControl, ERC
         setRoleAdmin(RESTRICTION_ADMIN, SECURITY_ADMIN);
         setRoleAdmin(IFC_TAX_ADMIN, SECURITY_ADMIN);
         setRoleAdmin(SALES_HISTORY_ADMIN, SECURITY_ADMIN);
+        setRoleAdmin(LOCKBOX_ADMIN, SECURITY_ADMIN);
 
         // mint 100b tokens
         _mint(_msgSender(), 100000000000 * 10 ** decimals());
 
         // start restriction trackers
-        _activeHolderRestrictions = new ExpirableTransactionsTracker(_restrictionTimeline);
-        _activeSales = new ExpirableTransactionsTracker(_salesTrackerTimeline);
+        //_activeHolderRestrictions = new ExpirableTransactionsTracker(_restrictionTimeline);
+        //_activeSales = new ExpirableTransactionsTracker(_salesTrackerTimeline);
+        //_lockboxDepository = new Depository();
     }
 
     /// @notice Pauses coin trading.
@@ -251,23 +262,32 @@ contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, Pausable, AccessControl, ERC
     {
         bool isFounderTransfer = false;
         uint balance = balanceOf(from);
+        uint lastMidnight = (block.timestamp / 86400) * 86400;
+
+        // reset sales counts every day at midnight
+        if (_lastTransferDate[from] < lastMidnight)
+            _transferTotals[from] = 0;
 
         // check if holder is a founder and is selling bonus coins (non-bonus coins are governed by active holder restrictions)
-        if (_founderCoinBalance[from] > 0 && _founderBonusRestrictionPercentage > 0 && _founderCoinBalance[from] >= _founderCoinCounter[from].mul(_founderRestrictionPercentage.div(100))) {
+        if (_founderCoinBalance[from] > 0 && _founderBonusRestrictionPercentage > 0 && _founderCoinBalance[from] >= _founderCoinCounter[from].mul(_founderRestrictionPercentage.div(100)))
+        {
             // if founder bonus coins, restrict sales per day
-            require (amount.div(balance.add(_activeSales.getUnexpiredTransactions(from))).mul(100) < _founderBonusRestrictionPercentage);
+            //require (amount.div(balance.add(_activeSales.getUnexpiredTransactions(from))).mul(100) < _founderBonusRestrictionPercentage);
+            require (amount.add(_transferTotals[from]).div(_founderCoinCounter[from].mul(100)) < _founderRestrictionPercentage, "TTM: Trade exceeds daily limit for founder bonus coins.");
 
             isFounderTransfer = true;
-        } else 
+        } 
+        else 
             // check for whale trade cap unless we're selling founder coins
-            require (amount < getNonvolumetricMaximum(from), "TTM: Maximum daily trade cap reached for this wallet's staking tier");
+            require (amount < getNonvolumetricMaximumFor(from), "TTM: Maximum daily trade cap reached for this wallet's staking tier.");
 
         // check that we're not trying to transfer restricted coins
-        if (_restrictionTimeline > 0 && _activeHolderRestrictions.hasTransactions(from)) // ActiveRestrictions[from]) // perform ActiveRestrictions check here to reduce gas by eliminating function call
-            require (amount < balance - _activeHolderRestrictions.getUnexpiredTransactions(from), "TTM: Attempt to transfer restricted coins");
+        if (_restrictionTimeline > 0 && _restrictedCoinsTotal[from] > 0) // _activeHolderRestrictions.hasTransactions(from)) // ActiveRestrictions[from]) // perform ActiveRestrictions check here to reduce gas by eliminating function call
+            require (amount.add(_transferTotals[from]) <= balance.sub(_restrictedCoinsTotal[from])); // _activeHolderRestrictions.getUnexpiredTransactions(from), "TTM: Attempt to transfer restricted coins.");
 
         // IFC tax
-        if (_ifcTaxAmount > 0 && _ifcTaxWallet != address(0)) {
+        if (_ifcTaxAmount > 0 && _ifcTaxWallet != address(0)) 
+        {
             uint taxAmount = amount.mul(_ifcTaxAmount.div(100));
 
             super._transfer(from, _ifcTaxWallet, taxAmount);
@@ -281,13 +301,19 @@ contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, Pausable, AccessControl, ERC
         if (isFounderTransfer || _founderCoinBalance[from] > 0)
         {
             // record founder coin transfer
-            _founderCoinBalance[from] = _founderCoinBalance[from] < amount ? 0 : _founderCoinBalance[from] - amount;
+            _founderCoinBalance[from] = _founderCoinBalance[from] < amount ? 0 : _founderCoinBalance[from].sub(amount);
 
-            if (_founderBonusRestrictionTimeline > 0)
-                _activeSales.addTransaction(from, amount, _founderBonusRestrictionTimeline);
+            //if (_founderBonusRestrictionTimeline > 0)
+                //_activeSales.addTransaction(from, amount, _founderBonusRestrictionTimeline);
         }
-        else // record all other transfers
-            _activeSales.addTransaction(from, amount);
+        //else // record all other transfers
+            //_activeSales.addTransaction(from, amount);
+        
+        if (amount != 0)
+        {
+            _lastTransferDate[from] = lastMidnight;
+            _transferTotals[from] += amount;
+        }
     }
 
     /// @notice Transfers _value amount of coins to the provided address with appropriate holder restrictions.
@@ -312,7 +338,8 @@ contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, Pausable, AccessControl, ERC
         require(super.transfer(to, amount));
 
         // add to restricted list
-        _activeHolderRestrictions.addTransaction(to, amount);
+        //_activeHolderRestrictions.addTransaction(to, amount);
+        addLockbox(to, amount, _restrictionTimeline);
 
         return true;
     }
@@ -339,7 +366,8 @@ contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, Pausable, AccessControl, ERC
         require(super.transfer(to, amount));
 
         // add to restricted list
-        _activeHolderRestrictions.addTransaction(to, amount, _presalesRestrictionTimeline);
+        //_activeHolderRestrictions.addTransaction(to, amount, _presalesRestrictionTimeline);
+        addLockbox(to, amount, _presalesRestrictionTimeline);
 
         return true;
     }
@@ -366,7 +394,8 @@ contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, Pausable, AccessControl, ERC
 
         // mark 75% of coins as founder coins and add to restricted list using the founder restriction timeline
         if (_founderRestrictionTimeline > 0)
-            _activeHolderRestrictions.addTransaction(to, amount.mul(_founderRestrictionPercentage.div(100)), _founderRestrictionTimeline);
+            //_activeHolderRestrictions.addTransaction(to, amount.mul(_founderRestrictionPercentage.div(100)), _founderRestrictionTimeline);
+            addLockbox(to, amount.mul(_founderRestrictionPercentage.div(100)), _founderRestrictionTimeline);
 
         // keep track of founder coins
         _founderCoinCounter[to] += amount;
@@ -390,9 +419,11 @@ contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, Pausable, AccessControl, ERC
     /// @return Total number of unrestricted coins.
     function getRestrictedCoinCount()
     public
+    view
     returns (uint)
     {
-        return _activeHolderRestrictions.getUnexpiredTransactions(_msgSender());
+        //return _activeHolderRestrictions.getUnexpiredTransactions(_msgSender());
+        return _restrictedCoins(_msgSender());
     }
 
     /// @notice Returns the total number of founder coins for the caller.
@@ -565,7 +596,7 @@ contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, Pausable, AccessControl, ERC
         // update restriction timeline
         _restrictionTimeline = restrictionTimeline;
 
-        _activeHolderRestrictions.setTimelineOffset(_restrictionTimeline);
+        //_activeHolderRestrictions.setTimelineOffset(_restrictionTimeline);
 
         return true;
     }
@@ -871,7 +902,7 @@ contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, Pausable, AccessControl, ERC
         // update restriction timeline
         _salesTrackerTimeline = salesTrackerTimeline;
 
-        _activeSales.setTimelineOffset(_salesTrackerTimeline);
+        //_activeSales.setTimelineOffset(_salesTrackerTimeline);
 
         return true;
     }
@@ -1050,8 +1081,29 @@ contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, Pausable, AccessControl, ERC
     ///
     /// @param account The address to get the maximum for.
     /// @return The total number of unrestricted coins.
+    function getNonvolumetricMaximumFor(address account) 
+    internal
+    view
+    returns (uint) 
+    {
+        return _applyNonvolumetricAlgoTo(account);
+    }
+
+    /// @notice Gets the nonvolumetric maximum nonrestricted coins for the provided address.
+    ///
+    /// @dev Calls the internal function to get the maximum nonrestricted coins.
+    ///
+    /// Requirements:
+    /// - Must have NONVOLUMETRIC_ADMIN role.
+    ///
+    /// Caveats:
+    /// - .
+    ///
+    /// @param account The address to get the maximum for.
+    /// @return The total number of unrestricted coins.
     function getNonvolumetricMaximum(address account) 
     public 
+    view
     onlyRole(NONVOLUMETRIC_ADMIN)
     returns (uint) 
     {
@@ -1071,6 +1123,7 @@ contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, Pausable, AccessControl, ERC
     /// @return The total number of unrestricted coins for the caller.
     function getNonvolumetricMaximum() 
     public 
+    view
     returns (uint) 
     {
         return _applyNonvolumetricAlgoTo(_msgSender());
@@ -1092,14 +1145,99 @@ contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, Pausable, AccessControl, ERC
     /// @return The total number of unrestricted coins.
     function _applyNonvolumetricAlgoTo(address account)
     internal
+    view
     returns (uint)
     {
-        // add sales tracker to balance for whale/nonvolumetric checks
-        uint balance = balanceOf(account) + _activeSales.getUnexpiredTransactions(account);
+        // add 24-hour sales tracker total to balance for whale/nonvolumetric checks
+        uint balance = balanceOf(account) + _transferTotals[account]; // _activeSales.getUnexpiredTransactions(account);
 
         if (!isWhale(balance))
             return balance;
         else
             return Algorithms.LogarithmicAlgoNatural(balance, _nonvolumetricSettingsDivisor, _nonvolumetricA, _nonvolumetricB, _nonvolumetricK);
+    }
+
+    function addLockbox(uint amount, uint lockLengthSeconds)
+    public
+    returns (uint LockboxId)
+    {
+        LockboxId = addLockboxCommon(_msgSender(), _msgSender(), amount, lockLengthSeconds);
+    }
+
+    function addLockbox(address beneficiary, uint amount, uint lockLengthSeconds)
+    public
+    returns (uint LockboxId)
+    {
+        address msgSender = _msgSender();
+
+        if (beneficiary != msgSender)
+            require (hasRole(LOCKBOX_ADMIN, msgSender) 
+                || hasRole(AIDROPPER_ROLE, msgSender)
+                || hasRole(OWNER_ROLE, msgSender), "TTM: Unsufficient permissions to create lockboxes for other accounts.");
+
+        LockboxId = addLockboxCommon(msgSender, beneficiary, amount, lockLengthSeconds);
+    }
+
+    function addLockboxCommon(address msgSender, address beneficiary, uint amount, uint lockLength)
+    private
+    returns (uint)
+    {
+        require (balanceOf(msgSender).sub(_restrictedCoinsTotal[msgSender]) >= amount, "TTM: Insufficient funds to create new lockbox.");
+
+        return _addLockbox(beneficiary, amount, lockLength);
+    }
+
+    function withdrawLockbox(uint lockboxId, uint amount)
+    public
+    returns (bool)
+    {
+        return _withdrawLockbox(_msgSender(), lockboxId, amount);
+    }
+
+    function withdrawLockbox(address beneficiary, uint lockboxId, uint amount)
+    public
+    {
+        address msgSender = _msgSender();
+
+        if (beneficiary != msgSender)
+            require (hasRole(LOCKBOX_ADMIN, msgSender) 
+                || hasRole(AIDROPPER_ROLE, msgSender)
+                || hasRole(OWNER_ROLE, msgSender), "TTM: Unsufficient permissions to create lockboxes for other accounts.");
+
+        _withdrawLockboxSpecial(beneficiary, lockboxId, amount);
+    }
+
+    function getLockboxList(address requester)
+    public
+    view
+    onlyRole(LOCKBOX_ADMIN)
+    returns (Lockbox[] memory)
+    {
+        return _getLockboxList(requester);
+    }
+
+    function getLockboxList()
+    public
+    view
+    returns (Lockbox[] memory)
+    {
+        return _getLockboxList(_msgSender());
+    }
+
+    function restrictedCoins(address requester)
+    public
+    view
+    onlyRole(LOCKBOX_ADMIN)
+    returns (uint)
+    {
+        return _restrictedCoins(requester);
+    }
+
+    function restrictedCoins()
+    public
+    view
+    returns (uint)
+    {
+        return _restrictedCoins(_msgSender());
     }
 }

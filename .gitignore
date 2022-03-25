@@ -6,3 +6,4 @@
 contracts/artifacts/
 /contracts/models/artifacts
 /libraries/artifacts
+/.deps
