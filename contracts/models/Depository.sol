@@ -6,84 +6,326 @@ pragma solidity ^0.8.0;
 // SPDX-License-Identifier: Unlicensed
 
 import "@openzeppelin/contracts/access/AccessControl.sol";
+import "@openzeppelin/contracts/utils/Context.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 
-contract Depository {
+import "../../libraries/Constants.sol";
+
+///
+/// @title TaggTeeM (TTM) token DEPOSITORY contract
+///
+/// @author John Daugherty
+///
+contract Depository is AccessControl {
     using SafeMath for uint;
 
     struct Lockbox {
-        uint balance;
         uint lockboxId;
+        uint balance;
         uint releaseTime;
         address beneficiary;
         address creator;
     }
 
     // transactions tracker
-    mapping (address => Lockbox[]) internal _lockboxDepository;
-    mapping (address => uint) internal _restrictedCoinsTotal;
+    mapping (address => Lockbox[]) private _lockboxDepository;
+    mapping (address => uint) private _restrictedCoinsTotal;
 
-    function _addLockbox(address beneficiary, uint amount, uint duration)
-    internal
+    // empty lockbox options
+    bool private _removeEmptyLockboxes = true;
+
+    // events
+    event AddedLockbox(Lockbox newLockbox);
+    event WithdrawLockbox(address beneficiary, uint lockboxId, uint amount);
+    event CloseLockbox(address beneficiary, uint lockboxId);
+
+    /// @notice Sets the flag governing whether to remove lockboxes with 0 balances.
+    ///
+    /// @dev Sets the flag.
+    ///
+    /// Requirements:
+    /// - Must have LOCKBOX_ADMIN role.
+    ///
+    /// Caveats:
+    /// - .
+    ///
+    /// @param removeEmptyLockboxes Whether to remove empty lockboxes.
+    /// @return Whether the flag was set.
+    function setRemoveEmptyLockboxes(bool removeEmptyLockboxes)
+    public
+    onlyRole(Constants.LOCKBOX_ADMIN)
+    returns (bool)
+    {
+        _removeEmptyLockboxes = removeEmptyLockboxes;
+
+        return _removeEmptyLockboxes;
+    }
+
+    /// @notice Gets the flag governing whether to remove lockboxes with 0 balances.
+    ///
+    /// @dev Returns the flag.
+    ///
+    /// Requirements:
+    /// - Must have LOCKBOX_ADMIN role.
+    ///
+    /// Caveats:
+    /// - .
+    ///
+    /// @return The value of the flag.
+    function getRemoveEmptyLockboxes()
+    public
+    view
+    onlyRole(Constants.LOCKBOX_ADMIN)
+    returns (bool)
+    {
+        return _removeEmptyLockboxes;
+    }
+
+    /// @notice Gets the list of lockboxes in the caller's depository.
+    ///
+    /// @dev Returns list of lockboxes.
+    ///
+    /// Requirements:
+    /// - .
+    ///
+    /// Caveats:
+    /// - .
+    ///
+    /// @return The list of lockboxes in the caller's depository.
+    function getLockboxList()
+    public
+    view
+    returns (Lockbox[] memory)
+    {
+        return getLockboxList(_msgSender());
+    }
+
+    /// @notice Gets the list of lockboxes in the account's depository.
+    ///
+    /// @dev Returns list of lockboxes.
+    ///
+    /// Requirements:
+    /// - Must have LOCKBOX_ADMIN role.
+    ///
+    /// Caveats:
+    /// - .
+    ///
+    /// @param account The account to look for lockboxes on.
+    /// @return The list of lockboxes in the account's depository.
+    function getLockboxList(address account)
+    public
+    view
+    virtual
+    returns (Lockbox[] memory)
+    {
+        address msgSender = _msgSender();
+
+        // only special roles can get the total restricted coin count for other people
+        if (account != msgSender)
+            require(hasRole(Constants.LOCKBOX_ADMIN, msgSender), "TTM: Insufficient permissions to get the total restricted coin count for other accounts.");
+
+        return _lockboxDepository[account];
+    }
+
+    /// @notice Gets the total restricted coin count for the caller.
+    ///
+    /// @dev Returns total restricted coin count.
+    ///
+    /// Requirements:
+    /// - .
+    ///
+    /// Caveats:
+    /// - .
+    ///
+    /// @return The caller's total restricted coin count.
+    function restrictedCoins()
+    public
+    view
+    returns (uint)
+    {
+        return restrictedCoins(_msgSender());
+    }
+
+    /// @notice Gets the total restricted coin count for the requested account.
+    ///
+    /// @dev Returns the total restricted coin count.
+    ///
+    /// Requirements:
+    /// - If requester is different than beneficiary, then must have LOCKBOX_ADMIN role.
+    ///
+    /// Caveats:
+    /// - .
+    ///
+    /// @param account The account to get the total restricted coin count for.
+    /// @return The account's total restricted coin count.
+    function restrictedCoins(address account)
+    public
+    view
     virtual
     returns (uint)
     {
+        address msgSender = _msgSender();
+
+        // only special roles can get the total restricted coin count for other people
+        if (account != msgSender)
+            require(hasRole(Constants.LOCKBOX_ADMIN, msgSender), "TTM: Insufficient permissions to get the total restricted coin count for other accounts.");
+
+        return _restrictedCoinsTotal[account];
+    }
+
+    /// @notice Adds a new lockbox on the beneficiary's wallet and funds it.
+    ///
+    /// @dev Checks if the requester is the same as the beneficiary, does some sanity checking, creates a new lockbox, adds the lockbox to
+    /// @dev   the depository, then updates the beneficiary's total restricted coin count, emits event.
+    ///
+    /// Requirements:
+    /// - If requester is different than beneficiary, then must have at least one of LOCKBOX_ADMIN, AIRDROPPER_ROLE, or OWNER_ROLE roles.
+    ///
+    /// Caveats:
+    /// - .
+    ///
+    /// @param requester The address requestng the new lockbox.
+    /// @param beneficiary The address to make the lockbox on/for.
+    /// @param amount The amount to fund the lockbox for.
+    /// @param duration The length of time the lockbox will be locked, in seconds.
+    /// @return The new lockbox details.
+    function addLockbox(address requester, address beneficiary, uint amount, uint duration)
+    internal
+    virtual
+    returns (Lockbox memory)
+    {
+        // only special roles can make lockboxes for other people
+        if (beneficiary != requester)
+            require (hasRole(Constants.LOCKBOX_ADMIN, requester) 
+                || hasRole(Constants.AIDROPPER_ROLE, requester)
+                || hasRole(Constants.OWNER_ROLE, requester), "TTM: Insufficient permissions to create lockboxes for other accounts.");
+
         require (amount > 0, "TTM: New lockbox amounts must be greater than zero.");
         require (beneficiary != address(0), "TTM: Lockbox beneficiary invalid.");
 
+        // create and populate a new lockbox
         Lockbox memory newLockbox;
 
         newLockbox.balance = amount;
         newLockbox.lockboxId = _lockboxDepository[beneficiary].length;
         newLockbox.beneficiary = beneficiary;
         newLockbox.releaseTime = block.timestamp.add(duration);
-        newLockbox.creator = msg.sender;
+        newLockbox.creator = requester;
 
+        // add the lockbox to this beneficiary's depository
         _lockboxDepository[beneficiary].push(newLockbox);
 
+        // keep track of this beneficiary's total restricted coin count
         _restrictedCoinsTotal[beneficiary] += amount;
 
-        return _lockboxDepository[beneficiary].length - 1;
+        // event        
+        emit AddedLockbox(newLockbox);
+
+        return newLockbox;
     }
 
-    function _getLockboxList(address requester)
-    internal
-    view
-    returns (Lockbox[] memory)
-    {
-        return _lockboxDepository[requester];
-    }
-
-    function _restrictedCoins(address requester)
-    internal
-    view
+    /// @notice Withdraws funds from one of the caller's lockboxes.
+    ///
+    /// @dev Checks that the person requesting is the beneficiary, then calls the internal withdrawl function.
+    ///
+    /// Requirements:
+    /// - .
+    ///
+    /// Caveats:
+    /// - .
+    ///
+    /// @param lockboxId The ID of the lockbox to withdraw from.
+    /// @param amount The amount to withdraw from the lockbox.
+    /// @return Whether the withdrawl was a success.
+    function withdrawLockbox(uint lockboxId, uint amount)
+    public
     virtual
-    returns (uint)
+    returns (bool)
     {
-        return _restrictedCoinsTotal[requester];
+        address requester = _msgSender();
+        address assignedBeneficiary = _lockboxDepository[requester][lockboxId].beneficiary;
+
+        require (requester == assignedBeneficiary, "TTM: Only the lockbox beneficiary can withdraw from this lockbox.");
+
+        return withdrawLockbox(requester, assignedBeneficiary, lockboxId, amount);
     }
 
-    function _withdrawLockbox(address requester, uint lockboxId, uint amount)
+    /// @notice Withdraws funds from one of the beneficiary's lockboxes.
+    ///
+    /// @dev Calls the internal withdrawl function.
+    ///
+    /// Requirements:
+    /// - If requester is different than beneficiary, then must have at least one of LOCKBOX_ADMIN, AIRDROPPER_ROLE, or OWNER_ROLE roles.
+    ///
+    /// Caveats:
+    /// - .
+    ///
+    /// @param beneficiary The address to look for the lockbox.
+    /// @param lockboxId The ID of the lockbox to withdraw from.
+    /// @param amount The amount to withdraw from the lockbox.
+    /// @return Whether the withdrawl was a success.
+    function withdrawLockbox(address beneficiary, uint lockboxId, uint amount)
+    public
+    virtual
+    returns (bool)
+    {
+        return withdrawLockbox(_msgSender(), beneficiary, lockboxId, amount);
+    }
+
+    /// @notice Withdraws funds from one of the beneficiary's lockboxes.
+    ///
+    /// @dev Checks if the requester is the same as the beneficiary, does some sanity checking, checks the timelock, removes funds from the lockbox,
+    /// @dev   updates the beneficiary's total restricted coin count, removes empty lockbox (when applicable), emits event
+    ///
+    /// Requirements:
+    /// - If requester is different than beneficiary, then must have at least one of LOCKBOX_ADMIN, AIRDROPPER_ROLE, or OWNER_ROLE roles.
+    ///
+    /// Caveats:
+    /// - .
+    ///
+    /// @param requester The address requestng the withdrawl.
+    /// @param beneficiary The address to look for the lockbox.
+    /// @param lockboxId The ID of the lockbox to withdraw from.
+    /// @param amount The amount to withdraw from the lockbox.
+    /// @return Whether the withdrawl was a success.
+    function withdrawLockbox(address requester, address beneficiary, uint lockboxId, uint amount)
     internal
     returns (bool)
     {
-        address beneficiary = _lockboxDepository[requester][lockboxId].beneficiary;
+        // only special roles can make lockboxes for other people
+        if (requester != beneficiary)
+            require (hasRole(Constants.LOCKBOX_ADMIN, requester) 
+                || hasRole(Constants.AIDROPPER_ROLE, requester)
+                || hasRole(Constants.OWNER_ROLE, requester), "TTM: Unsufficient permissions to create lockboxes for other accounts.");
 
-        require (requester == _lockboxDepository[requester][lockboxId].creator
-            || requester == beneficiary, "TTM: Only the lockbox creator or the beneficiary can withdraw from this lockbox.");
+        // get the lockbox balance to memory so we can pay less gas
+        uint lockboxBalance = _lockboxDepository[beneficiary][lockboxId].balance;
 
-        return _withdrawLockbox(beneficiary, lockboxId, amount);
-    }
-
-    function _withdrawLockboxSpecial(address beneficiary, uint lockboxId, uint amount)
-    internal
-    returns (bool)
-    {
-        require (_lockboxDepository[beneficiary][lockboxId].balance >= amount, "TTM: Insufficient funds within lockbox for withdrawl.");
+        require (lockboxBalance >= amount, "TTM: Insufficient funds within lockbox for withdrawl.");
         require (block.timestamp >= _lockboxDepository[beneficiary][lockboxId].releaseTime, "TTM: Timelock has not expired on this lockbox.");
 
-        _lockboxDepository[beneficiary][lockboxId].balance -= amount;
-        _restrictedCoinsTotal[beneficiary] -= amount;
+        // figure out what the final balance is
+        uint finalBalance = lockboxBalance.sub(amount);
+
+        // update lockbox and total restricted coin count
+        _lockboxDepository[beneficiary][lockboxId].balance = finalBalance;
+        _restrictedCoinsTotal[beneficiary] = _restrictedCoinsTotal[beneficiary].sub(amount);
+
+        if (finalBalance <= 0)
+        {
+            if (_removeEmptyLockboxes)
+            {
+                // lockboxes can be unordered, so do easy removal here
+                _lockboxDepository[beneficiary][lockboxId] = _lockboxDepository[beneficiary][_lockboxDepository[beneficiary].length - 1];
+
+                _lockboxDepository[beneficiary].pop();
+            }
+    
+            // emit event whether we're removing empty lockboxes or not so that we can indicate a lockbox is finished
+            emit CloseLockbox(beneficiary, lockboxId);
+        }
+        else
+            emit WithdrawLockbox(beneficiary, lockboxId, amount);
 
         return true;
     }

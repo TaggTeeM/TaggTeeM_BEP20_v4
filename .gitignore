@@ -6,4 +6,6 @@
 contracts/artifacts/
 /contracts/models/artifacts
 /libraries/artifacts
-/.deps
+#/.deps
+*/artifacts/*
+/.deps/npm/@openzeppelin/contracts/token/ERC20/artifacts
