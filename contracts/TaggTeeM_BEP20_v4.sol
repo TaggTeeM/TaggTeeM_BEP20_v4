@@ -15,14 +15,14 @@ import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Votes.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 
 import "./models/Depository.sol";
-import "../libraries/Algorithms.sol";
+import "./models/Nonvolumetric.sol";
 
 ///
 /// @title TaggTeeM (TTM) token BEP20 contract
 ///
 /// @author John Daugherty
 ///
-contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, Pausable, AccessControl, ERC20Permit, ERC20Votes, Ownable, Depository {
+contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, Pausable, AccessControl, ERC20Permit, ERC20Votes, Ownable, Depository, Nonvolumetric {
     using SafeMath for uint;
 
     // roles
@@ -32,17 +32,19 @@ contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, Pausable, AccessControl, ERC
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
     bytes32 public constant SECURITY_ADMIN = keccak256("SECURITY_ADMIN");
     bytes32 public constant NONVOLUMETRIC_ADMIN = keccak256("NONVOLUMETRIC_ADMIN");
-    bytes32 public constant AIDROPPER_ROLE = keccak256("AIDROPPER_ROLE");
+    bytes32 public constant AIRDROPPER_ROLE = keccak256("AIRDROPPER_ROLE");
     bytes32 public constant RESTRICTION_ADMIN = keccak256("RESTRICTION_ADMIN");
     bytes32 public constant IFC_TAX_ADMIN = keccak256("IFC_TAX_ADMIN");
     bytes32 public constant SALES_HISTORY_ADMIN = keccak256("SALES_HISTORY_ADMIN");
     bytes32 public constant LOCKBOX_ADMIN = keccak256("LOCKBOX_ADMIN");
 
+    /*
     // keep track of how much is in public supply
     uint private _totalPublicSupply;
 
     // whale settings
     uint private _whaleThreshold = 1; // 1%
+    */
 
     // restrictions & sales settings
     uint private _presalesRestrictionTimeline = 8 * 30 * 24 * 60 * 60; // 8 months
@@ -55,11 +57,13 @@ contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, Pausable, AccessControl, ERC
     uint private _founderRestrictionTimeline = 6 * 30 * 24 * 60 * 60; // 6 months
     uint private _founderBonusRestrictionPercentage = 1; // 1%
 
+    /*
     // for nonvolumetric calculations
     uint private _nonvolumetricSettingsDivisor = 100; // to divide a, b, and k by
     int private _nonvolumetricA = 4000; 
     int private _nonvolumetricB = 600;
     int private _nonvolumetricK = 170;
+    */
 
     // for keeping track of founder coins
     mapping (address => uint) private _founderCoinCounter;
@@ -89,7 +93,7 @@ contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, Pausable, AccessControl, ERC
         setRoleAdmin(MINTER_ROLE, SECURITY_ADMIN);
         setRoleAdmin(SECURITY_ADMIN, SECURITY_ADMIN);
         setRoleAdmin(NONVOLUMETRIC_ADMIN, SECURITY_ADMIN);
-        setRoleAdmin(AIDROPPER_ROLE, SECURITY_ADMIN);
+        setRoleAdmin(AIRDROPPER_ROLE, SECURITY_ADMIN);
         setRoleAdmin(RESTRICTION_ADMIN, SECURITY_ADMIN);
         setRoleAdmin(IFC_TAX_ADMIN, SECURITY_ADMIN);
         setRoleAdmin(SALES_HISTORY_ADMIN, SECURITY_ADMIN);
@@ -228,6 +232,23 @@ contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, Pausable, AccessControl, ERC
         super._burn(account, amount);
     }    
 
+    function tradableBalanceOf(address account)
+    public
+    view
+    returns (uint)
+    {
+        // add 24-hour sales tracker total to balance for whale/nonvolumetric checks
+        return balanceOf(account).add(_transferTotals[account]).sub(restrictedCoins(account));
+    }
+
+    function tradableBalanceOf()
+    public
+    view
+    returns (uint)
+    {
+        return tradableBalanceOf(_msgSender());
+    }
+
     /// @notice Performs appropriate limitation checks and cleanup when transferring coins.
     ///
     /// @dev First checks founder and nonvolumetric restrictions, then checks time restrictions before taking IFC
@@ -250,8 +271,8 @@ contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, Pausable, AccessControl, ERC
     whenNotPaused
     {
         bool isFounderTransfer = false;
-        uint balance = balanceOf(from);
         uint lastMidnight = _salesTrackerTimeline == 0 ? block.timestamp : (block.timestamp / _salesTrackerTimeline) * _salesTrackerTimeline;
+        uint tradableBalance = tradableBalanceOf(from);
 
         // reset sales counts every day at midnight
         if (_lastTransferDate[from] < lastMidnight)
@@ -261,35 +282,36 @@ contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, Pausable, AccessControl, ERC
         if (_founderCoinBalance[from] > 0 && _founderBonusRestrictionPercentage > 0 && _founderCoinBalance[from] >= _founderCoinCounter[from].mul(_founderRestrictionPercentage.div(100)))
         {
             // if founder bonus coins, restrict sales per day
-            require (amount.add(_transferTotals[from]).div(_founderCoinCounter[from].mul(100)) < _founderBonusRestrictionPercentage, "TTM: Trade exceeds daily limit for founder bonus coins.");
+            require (amount.add(_transferTotals[from]).mul(100).div(_founderCoinCounter[from]) < _founderBonusRestrictionPercentage, "TTM: Trade exceeds daily limit for founder bonus coins.");
 
             isFounderTransfer = true;
         } 
-        else 
-            // check for whale trade cap unless we're selling founder coins
-            require (amount < getNonvolumetricMaximumFor(from), "TTM: Maximum daily trade cap reached for this wallet's staking tier.");
+        else if (from != owner())
+            // check for whale trade cap, ignoring caps for the owner
+            require (amount < getNonvolumetricMaximum(tradableBalance), "TTM: Maximum daily trade cap reached for this wallet's staking tier.");
 
         // check that we're not trying to transfer restricted coins
-        if (_restrictionTimeline > 0 && restrictedCoins(from) > 0) // perform restrictions check here to reduce gas by eliminating function call
-            require (amount.add(_transferTotals[from]) <= balance.sub(restrictedCoins(from)), "TTM: Attempt to transfer restricted coins.");
+        if (_restrictionTimeline > 0 && restrictedCoins(from) > 0)
+            require (amount <= tradableBalance, "TTM: Attempt to transfer restricted coins.");
 
         // IFC tax
         if (_ifcTaxAmount > 0 && _ifcTaxWallet != address(0)) 
         {
-            uint taxAmount = amount.mul(_ifcTaxAmount.div(100));
+            uint taxAmount = amount.mul(_ifcTaxAmount).div(100);
 
             super._transfer(from, _ifcTaxWallet, taxAmount);
 
             amount = amount.sub(taxAmount);
         }
 
-        // require that transaction completes successfully
+        // do the transfer
         super._transfer(from, to, amount);
 
+        // record founder coin transfer
         if (isFounderTransfer || _founderCoinBalance[from] > 0)
-            // record founder coin transfer
             _founderCoinBalance[from] = _founderCoinBalance[from] < amount ? 0 : _founderCoinBalance[from].sub(amount);
         
+        // record the trade for this user
         if (amount != 0)
         {
             _lastTransferDate[from] = lastMidnight;
@@ -313,13 +335,13 @@ contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, Pausable, AccessControl, ERC
     function airdrop(address to, uint256 amount)
     public
     whenNotPaused
-    onlyRole(AIDROPPER_ROLE)
+    onlyRole(AIRDROPPER_ROLE)
     returns (bool)
     {
         require(super.transfer(to, amount));
 
         // add to restricted list
-        addLockbox(to, amount.mul(_airdropRestrictionPercentage.div(100)), _restrictionTimeline);
+        addLockbox(to, amount.mul(_airdropRestrictionPercentage).div(100), _restrictionTimeline);
 
         return true;
     }
@@ -340,13 +362,13 @@ contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, Pausable, AccessControl, ERC
     function presalesAirdrop(address to, uint256 amount)
     public
     whenNotPaused
-    onlyRole(AIDROPPER_ROLE)
+    onlyRole(AIRDROPPER_ROLE)
     returns (bool)
     {
         require(super.transfer(to, amount));
 
         // add to restricted list
-        addLockbox(to, amount.mul(_airdropRestrictionPercentage.div(100)), _presalesRestrictionTimeline);
+        addLockbox(to, amount.mul(_airdropRestrictionPercentage).div(100), _presalesRestrictionTimeline);
 
         return true;
     }
@@ -373,7 +395,7 @@ contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, Pausable, AccessControl, ERC
 
         // mark 75% of coins as founder coins and add to restricted list using the founder restriction timeline
         if (_founderRestrictionTimeline > 0)
-            addLockbox(to, amount.mul(_founderRestrictionPercentage.div(100)), _founderRestrictionTimeline);
+            addLockbox(to, amount.mul(_founderRestrictionPercentage).div(100), _founderRestrictionTimeline);
 
         // keep track of founder coins
         _founderCoinCounter[to] += amount;
@@ -445,6 +467,10 @@ contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, Pausable, AccessControl, ERC
         return _totalFounderCoinsIssued;
     }
 
+
+
+
+    /*
     /// @notice Checks if the amount provided exceeds the whale threshold.
     ///
     /// @dev If the whale threshold is set to 0, always return false, otherwise check total public supply.
@@ -467,8 +493,14 @@ contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, Pausable, AccessControl, ERC
         if (_whaleThreshold == 0)
             return false;
         else
-            return amount.div(_totalPublicSupply) > _whaleThreshold;
+            return amount.mul(100).div(_totalPublicSupply) > _whaleThreshold;
     }
+    */
+
+
+
+
+
 
     /// @notice Checks if the balance of the address provided exceeds the whale threshold.
     ///
@@ -486,9 +518,13 @@ contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, Pausable, AccessControl, ERC
     public 
     view 
     returns (bool) {
-        return isWhale(balanceOf(account));
+        return super.isWhale(balanceOf(account));
     }
 
+
+
+
+    /*
     /// @notice Updates the whale threshold.
     ///
     /// @dev Checks that the new threshold is between 0 and 100, then sets the whale threshold.
@@ -532,6 +568,12 @@ contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, Pausable, AccessControl, ERC
     {
         return _whaleThreshold;
     }
+    */
+
+
+
+
+
 
     /// @notice Updates the active restriction timeline.
     ///
@@ -925,6 +967,13 @@ contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, Pausable, AccessControl, ERC
         return _salesTrackerTimeline;
     }
 
+
+
+
+
+
+
+    /*
     /// @notice Updates the total public supply.
     ///
     /// @dev Checks that the new supply amount is positive and less than the total supply, then sets the total public supply.
@@ -949,7 +998,41 @@ contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, Pausable, AccessControl, ERC
 
         return true;
     }
+    */
 
+
+
+
+
+    /// @notice Updates the total public supply.
+    ///
+    /// @dev Checks that the new supply amount is positive and less than the total supply, then sets the total public supply.
+    ///
+    /// Requirements:
+    /// - Must have OWNER_ROLE role.
+    ///
+    /// Caveats:
+    /// - .
+    ///
+    /// @param totalPublicSupply The new total public supply.
+    /// @return Whether the total public supply was successfully set.
+    function setTotalPublicSupply(uint totalPublicSupply)
+    public
+    override
+    onlyRole(OWNER_ROLE)
+    returns (bool)
+    {
+        require (totalPublicSupply <= totalSupply(), "TTM: Total public supply can't be greater than the total coin supply.");
+
+        return super.setTotalPublicSupply(totalPublicSupply);
+    }
+
+
+
+
+
+
+    /*
     /// @notice Gets the total public supply.
     ///
     /// Requirements:
@@ -1034,6 +1117,33 @@ contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, Pausable, AccessControl, ERC
     {
         return _applyNonvolumetricAlgoTo(account);
     }
+    */
+
+
+
+
+
+
+    
+
+    /// @notice Gets the nonvolumetric maximum nonrestricted coins for the caller.
+    ///
+    /// @dev Calls the internal function to get the maximum nonrestricted coins for the message sender.
+    ///
+    /// Requirements:
+    /// - .
+    ///
+    /// Caveats:
+    /// - .
+    ///
+    /// @return The total number of unrestricted coins for the caller.
+    function getNonvolumetricMaximum() 
+    public 
+    view
+    returns (uint) 
+    {
+        return super.getNonvolumetricMaximum(tradableBalanceOf(_msgSender()));
+    }
 
     /// @notice Gets the nonvolumetric maximum nonrestricted coins for the provided address.
     ///
@@ -1053,28 +1163,14 @@ contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, Pausable, AccessControl, ERC
     onlyRole(NONVOLUMETRIC_ADMIN)
     returns (uint) 
     {
-        return _applyNonvolumetricAlgoTo(account);
+        return super.getNonvolumetricMaximum(tradableBalanceOf(account));
     }
 
-    /// @notice Gets the nonvolumetric maximum nonrestricted coins for the caller.
-    ///
-    /// @dev Calls the internal function to get the maximum nonrestricted coins for the message sender.
-    ///
-    /// Requirements:
-    /// - .
-    ///
-    /// Caveats:
-    /// - .
-    ///
-    /// @return The total number of unrestricted coins for the caller.
-    function getNonvolumetricMaximum() 
-    public 
-    view
-    returns (uint) 
-    {
-        return _applyNonvolumetricAlgoTo(_msgSender());
-    }
 
+
+
+
+    /*
     /// @notice Gets the nonvolumetric maximum nonrestricted coins for the provided address.
     ///
     /// @dev If the holder is a whale, applies the NonVolumetric algorithm to their current holdings (including restricted coins), and returns the
@@ -1095,13 +1191,21 @@ contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, Pausable, AccessControl, ERC
     returns (uint)
     {
         // add 24-hour sales tracker total to balance for whale/nonvolumetric checks
-        uint balance = balanceOf(account) + _transferTotals[account];
+        uint balance = balanceOf(account).add(_transferTotals[account]).sub(restrictedCoins(account));
 
-        if (!isWhale(balance))
-            return balance;
+        if (isWhale(balance))
+            return Algorithms.LogarithmicAlgoNatural(balance, _nonvolumetricSettingsDivisor, _nonvolumetricA, _nonvolumetricB, _nonvolumetricK)  * 10 ** decimals();
         else
-            return Algorithms.LogarithmicAlgoNatural(balance, _nonvolumetricSettingsDivisor, _nonvolumetricA, _nonvolumetricB, _nonvolumetricK);
+            return balance;
     }
+    */
+
+
+
+
+
+
+
 
     /// @notice Adds a new lockbox on the caller's wallet and funds it.
     ///
@@ -1118,9 +1222,9 @@ contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, Pausable, AccessControl, ERC
     /// @return NewLockbox The new lockbox details.
     function addLockbox(uint amount, uint lockLengthSeconds)
     public
-    returns (Lockbox memory NewLockbox)
+    returns (Lockbox memory)
     {
-        NewLockbox = addLockbox(_msgSender(), _msgSender(), amount, lockLengthSeconds);
+        return addLockbox(_msgSender(), _msgSender(), amount, lockLengthSeconds);
     }
 
     /// @notice Adds a new lockbox on the beneficiary's wallet and funds it.
@@ -1139,9 +1243,9 @@ contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, Pausable, AccessControl, ERC
     /// @return NewLockbox The new lockbox details.
     function addLockbox(address beneficiary, uint amount, uint lockLengthSeconds)
     public
-    returns (Lockbox memory NewLockbox)
+    returns (Lockbox memory)
     {
-        NewLockbox = addLockbox(_msgSender(), beneficiary, amount, lockLengthSeconds);
+        return addLockbox(_msgSender(), beneficiary, amount, lockLengthSeconds);
     }
 
     /// @notice Adds a new lockbox on the beneficiary's wallet and funds it.

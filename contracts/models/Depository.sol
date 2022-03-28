@@ -122,7 +122,7 @@ contract Depository is AccessControl {
 
         // only special roles can get the total restricted coin count for other people
         if (account != msgSender)
-            require(hasRole(Constants.LOCKBOX_ADMIN, msgSender), "TTM: Insufficient permissions to get the total restricted coin count for other accounts.");
+            require(hasRole(Constants.LOCKBOX_ADMIN, msgSender), "TTM: Insufficient permissions to get the complete lockbox list for other accounts.");
 
         return _lockboxDepository[account];
     }
@@ -168,7 +168,9 @@ contract Depository is AccessControl {
 
         // only special roles can get the total restricted coin count for other people
         if (account != msgSender)
-            require(hasRole(Constants.LOCKBOX_ADMIN, msgSender), "TTM: Insufficient permissions to get the total restricted coin count for other accounts.");
+            require(hasRole(Constants.LOCKBOX_ADMIN, msgSender)
+                || hasRole(Constants.AIRDROPPER_ROLE, msgSender)
+                || hasRole(Constants.OWNER_ROLE, msgSender), "TTM: Insufficient permissions to get the total restricted coin count for other accounts.");
 
         return _restrictedCoinsTotal[account];
     }
@@ -197,7 +199,7 @@ contract Depository is AccessControl {
         // only special roles can make lockboxes for other people
         if (beneficiary != requester)
             require (hasRole(Constants.LOCKBOX_ADMIN, requester) 
-                || hasRole(Constants.AIDROPPER_ROLE, requester)
+                || hasRole(Constants.AIRDROPPER_ROLE, requester)
                 || hasRole(Constants.OWNER_ROLE, requester), "TTM: Insufficient permissions to create lockboxes for other accounts.");
 
         require (amount > 0, "TTM: New lockbox amounts must be greater than zero.");
@@ -295,7 +297,7 @@ contract Depository is AccessControl {
         // only special roles can make lockboxes for other people
         if (requester != beneficiary)
             require (hasRole(Constants.LOCKBOX_ADMIN, requester) 
-                || hasRole(Constants.AIDROPPER_ROLE, requester)
+                || hasRole(Constants.AIRDROPPER_ROLE, requester)
                 || hasRole(Constants.OWNER_ROLE, requester), "TTM: Unsufficient permissions to create lockboxes for other accounts.");
 
         // get the lockbox balance to memory so we can pay less gas
