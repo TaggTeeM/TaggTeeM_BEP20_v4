@@ -38,14 +38,6 @@ contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, Pausable, AccessControl, ERC
     bytes32 public constant SALES_HISTORY_ADMIN = keccak256("SALES_HISTORY_ADMIN");
     bytes32 public constant LOCKBOX_ADMIN = keccak256("LOCKBOX_ADMIN");
 
-    /*
-    // keep track of how much is in public supply
-    uint private _totalPublicSupply;
-
-    // whale settings
-    uint private _whaleThreshold = 1; // 1%
-    */
-
     // restrictions & sales settings
     uint private _presalesRestrictionTimeline = 8 * 30 * 24 * 60 * 60; // 8 months
     uint private _restrictionTimeline = 6 * 30 * 24 * 60 * 60; // 6 months
@@ -56,14 +48,6 @@ contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, Pausable, AccessControl, ERC
     uint private _founderRestrictionPercentage = 75; // 75%
     uint private _founderRestrictionTimeline = 6 * 30 * 24 * 60 * 60; // 6 months
     uint private _founderBonusRestrictionPercentage = 1; // 1%
-
-    /*
-    // for nonvolumetric calculations
-    uint private _nonvolumetricSettingsDivisor = 100; // to divide a, b, and k by
-    int private _nonvolumetricA = 4000; 
-    int private _nonvolumetricB = 600;
-    int private _nonvolumetricK = 170;
-    */
 
     // for keeping track of founder coins
     mapping (address => uint) private _founderCoinCounter;
@@ -232,21 +216,44 @@ contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, Pausable, AccessControl, ERC
         super._burn(account, amount);
     }    
 
-    function tradableBalanceOf(address account)
-    public
-    view
-    returns (uint)
-    {
-        // add 24-hour sales tracker total to balance for whale/nonvolumetric checks
-        return balanceOf(account).add(_transferTotals[account]).sub(restrictedCoins(account));
+    /// @notice Gets an account's currently tradable balance.
+    ///
+    /// @dev The currently tradable balance is the total balance of the account less all restricted tokens.
+    ///
+    /// Requirements:
+    /// - .
+    ///
+    /// Caveats:
+    /// - .
+    ///
+    /// @param account The address to get the balance for.
+    /// @return The tradable balance
+    function balanceOf(address account) 
+    public 
+    view 
+    override 
+    returns (uint256) {
+        return super.balanceOf(account).sub(restrictedCoins(account));
     }
 
-    function tradableBalanceOf()
+    /// @notice Gets an account's total balance.
+    ///
+    /// @dev The current total balance is the total balance of the account including restricted tokens.
+    ///
+    /// Requirements:
+    /// - .
+    ///
+    /// Caveats:
+    /// - .
+    ///
+    /// @param account The address to get the balance for.
+    /// @return The total balance
+    function totalBalanceOf(address account)
     public
     view
     returns (uint)
     {
-        return tradableBalanceOf(_msgSender());
+        return balanceOf(account);
     }
 
     /// @notice Performs appropriate limitation checks and cleanup when transferring coins.
@@ -272,7 +279,7 @@ contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, Pausable, AccessControl, ERC
     {
         bool isFounderTransfer = false;
         uint lastMidnight = _salesTrackerTimeline == 0 ? block.timestamp : (block.timestamp / _salesTrackerTimeline) * _salesTrackerTimeline;
-        uint tradableBalance = tradableBalanceOf(from);
+        uint tradableBalance = balanceOf(from);
 
         // reset sales counts every day at midnight
         if (_lastTransferDate[from] < lastMidnight)
@@ -467,41 +474,6 @@ contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, Pausable, AccessControl, ERC
         return _totalFounderCoinsIssued;
     }
 
-
-
-
-    /*
-    /// @notice Checks if the amount provided exceeds the whale threshold.
-    ///
-    /// @dev If the whale threshold is set to 0, always return false, otherwise check total public supply.
-    ///
-    /// Requirements:
-    /// - .
-    ///
-    /// Caveats:
-    /// - .
-    ///
-    /// @param amount The amount of coin to check for whale threshold.
-    /// @return Whether the amount exceeds the whale threshold.
-    function isWhale(uint256 amount) 
-    public 
-    view 
-    returns (bool) {
-        require (_totalPublicSupply > 0, "TTM: Error checking whale status - total coin supply not set");
-        
-        // whaleThreshold of 0 turns off whales
-        if (_whaleThreshold == 0)
-            return false;
-        else
-            return amount.mul(100).div(_totalPublicSupply) > _whaleThreshold;
-    }
-    */
-
-
-
-
-
-
     /// @notice Checks if the balance of the address provided exceeds the whale threshold.
     ///
     /// @dev If the whale threshold is set to 0, always return false, otherwise check total public supply.
@@ -520,60 +492,6 @@ contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, Pausable, AccessControl, ERC
     returns (bool) {
         return super.isWhale(balanceOf(account));
     }
-
-
-
-
-    /*
-    /// @notice Updates the whale threshold.
-    ///
-    /// @dev Checks that the new threshold is between 0 and 100, then sets the whale threshold.
-    ///
-    /// Requirements:
-    /// - Must have NONVOLUMETRIC_ADMIN role.
-    ///
-    /// Caveats:
-    /// - .
-    ///
-    /// @param whaleThreshold The new whale threshold.
-    /// @return Whether the whale threshold was successfully set.
-    function setWhaleThreshold(uint whaleThreshold) 
-    public
-    onlyRole(NONVOLUMETRIC_ADMIN)
-    returns (bool)
-    {
-        // require that requested threshold is >= 0 && <= 100 - 0 turns off whale checking
-        require (whaleThreshold >= 0 && whaleThreshold <= 100, "TTM: Nonvolumetric threshold must be between 0% and 100%.");
-
-        // update whale threshold
-        _whaleThreshold = whaleThreshold;
-
-        return true;
-    }
-
-    /// @notice Gets the current whale threshold.
-    ///
-    /// Requirements:
-    /// - Must have NONVOLUMETRIC_ADMIN role.
-    ///
-    /// Caveats:
-    /// - .
-    ///
-    /// @return The current whale threshold.
-    function getWhaleThreshold() 
-    public
-    view
-    onlyRole(NONVOLUMETRIC_ADMIN)
-    returns (uint)
-    {
-        return _whaleThreshold;
-    }
-    */
-
-
-
-
-
 
     /// @notice Updates the active restriction timeline.
     ///
@@ -967,43 +885,6 @@ contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, Pausable, AccessControl, ERC
         return _salesTrackerTimeline;
     }
 
-
-
-
-
-
-
-    /*
-    /// @notice Updates the total public supply.
-    ///
-    /// @dev Checks that the new supply amount is positive and less than the total supply, then sets the total public supply.
-    ///
-    /// Requirements:
-    /// - Must have OWNER_ROLE role.
-    ///
-    /// Caveats:
-    /// - .
-    ///
-    /// @param totalPublicSupply The new total public supply.
-    /// @return Whether the total public supply was successfully set.
-    function setTotalPublicSupply(uint totalPublicSupply)
-    public
-    onlyRole(OWNER_ROLE)
-    returns (bool)
-    {
-        require (totalPublicSupply >= 0, "TTM: Total public supply can't be negative.");
-        require (totalPublicSupply <= totalSupply(), "TTM: Total public supply can't be greater than the total coin supply.");
-
-        _totalPublicSupply = totalPublicSupply;
-
-        return true;
-    }
-    */
-
-
-
-
-
     /// @notice Updates the total public supply.
     ///
     /// @dev Checks that the new supply amount is positive and less than the total supply, then sets the total public supply.
@@ -1027,105 +908,6 @@ contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, Pausable, AccessControl, ERC
         return super.setTotalPublicSupply(totalPublicSupply);
     }
 
-
-
-
-
-
-    /*
-    /// @notice Gets the total public supply.
-    ///
-    /// Requirements:
-    /// - .
-    ///
-    /// Caveats:
-    /// - .
-    ///
-    /// @return The current total public supply.
-    function getTotalPublicSupply() 
-    public
-    view
-    returns (uint)
-    {
-        return _totalPublicSupply;
-    }
-
-    /// @notice Updates the nonvolumetric parameters.
-    ///
-    /// @dev Checks that the settings divisor is positive, then sets the parameters.
-    ///
-    /// Requirements:
-    /// - Must have OWNER_ROLE role.
-    ///
-    /// Caveats:
-    /// - .
-    ///
-    /// @param NonvolumetricSettingsDivisor The new settings divisor.
-    /// @param AParameter The new A parameter.
-    /// @param BParameter The new B parameter.
-    /// @param KParameter The new K parameter.
-    /// @return Whether the parameters were successfully set.
-    function setNonvolumetricParameters (uint NonvolumetricSettingsDivisor, int AParameter, int BParameter, int KParameter)
-    public
-    onlyRole(OWNER_ROLE)
-    returns (bool)
-    {
-        require (NonvolumetricSettingsDivisor > 0, "TTM: Settings divisor must be greater than 0");
-
-        _nonvolumetricSettingsDivisor = NonvolumetricSettingsDivisor;
-        _nonvolumetricA = AParameter;
-        _nonvolumetricB = BParameter;
-        _nonvolumetricK = KParameter;
-
-        return true;
-    }
-
-    /// @notice Gets all nonvolumetric parameters.
-    ///
-    /// Requirements:
-    /// - Must have OWNER_ROLE role.
-    ///
-    /// Caveats:
-    /// - .
-    ///
-    /// @return All of the nonvolumetric parameters.
-    function getNonvolumetricParameters() 
-    public
-    view
-    onlyRole(OWNER_ROLE)
-    returns (uint, int, int, int)
-    {
-        return (_nonvolumetricSettingsDivisor, _nonvolumetricA, _nonvolumetricB, _nonvolumetricK);
-    }
-
-    /// @notice Gets the nonvolumetric maximum nonrestricted coins for the provided address.
-    ///
-    /// @dev Calls the internal function to get the maximum nonrestricted coins.
-    ///
-    /// Requirements:
-    /// - .
-    ///
-    /// Caveats:
-    /// - .
-    ///
-    /// @param account The address to get the maximum for.
-    /// @return The total number of unrestricted coins.
-    function getNonvolumetricMaximumFor(address account) 
-    internal
-    view
-    returns (uint) 
-    {
-        return _applyNonvolumetricAlgoTo(account);
-    }
-    */
-
-
-
-
-
-
-    
-
     /// @notice Gets the nonvolumetric maximum nonrestricted coins for the caller.
     ///
     /// @dev Calls the internal function to get the maximum nonrestricted coins for the message sender.
@@ -1142,7 +924,7 @@ contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, Pausable, AccessControl, ERC
     view
     returns (uint) 
     {
-        return super.getNonvolumetricMaximum(tradableBalanceOf(_msgSender()));
+        return super.getNonvolumetricMaximum(balanceOf(_msgSender()));
     }
 
     /// @notice Gets the nonvolumetric maximum nonrestricted coins for the provided address.
@@ -1163,49 +945,8 @@ contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, Pausable, AccessControl, ERC
     onlyRole(NONVOLUMETRIC_ADMIN)
     returns (uint) 
     {
-        return super.getNonvolumetricMaximum(tradableBalanceOf(account));
+        return super.getNonvolumetricMaximum(balanceOf(account));
     }
-
-
-
-
-
-    /*
-    /// @notice Gets the nonvolumetric maximum nonrestricted coins for the provided address.
-    ///
-    /// @dev If the holder is a whale, applies the NonVolumetric algorithm to their current holdings (including restricted coins), and returns the
-    /// @dev   number of restricted coins they currently have. For non-whales, the whole balance (no restrictions) is returned.
-    /// @dev The current nonvolumetric algorithm is =>> "y = a * ln(x * k) + b"
-    ///
-    /// Requirements:
-    /// - .
-    ///
-    /// Caveats:
-    /// - .
-    ///
-    /// @param account The address to get the maximum for.
-    /// @return The total number of unrestricted coins.
-    function _applyNonvolumetricAlgoTo(address account)
-    internal
-    view
-    returns (uint)
-    {
-        // add 24-hour sales tracker total to balance for whale/nonvolumetric checks
-        uint balance = balanceOf(account).add(_transferTotals[account]).sub(restrictedCoins(account));
-
-        if (isWhale(balance))
-            return Algorithms.LogarithmicAlgoNatural(balance, _nonvolumetricSettingsDivisor, _nonvolumetricA, _nonvolumetricB, _nonvolumetricK)  * 10 ** decimals();
-        else
-            return balance;
-    }
-    */
-
-
-
-
-
-
-
 
     /// @notice Adds a new lockbox on the caller's wallet and funds it.
     ///
