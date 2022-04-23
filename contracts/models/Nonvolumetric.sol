@@ -27,27 +27,10 @@ contract Nonvolumetric is AccessControl {
     uint private _whaleThreshold = 1; // 1%
 
     // for nonvolumetric calculations
-    uint private _nonvolumetricSettingsDivisor = 1000000; // to divide a, b, and k by
-    int private _nonvolumetricA = 15000000; 
-    int private _nonvolumetricB = 4100000;
-    int private _nonvolumetricK = 4500000;
-
-
-
-
-
-    uint[5] private percentageSplits = [0,0,0,50,70];
-    mapping(uint => int[3]) private slopes;
-
-    constructor() {
-        slopes[0] = [-12000, 75, 75];
-        slopes[50] = [-5000, 75, 89];
-        slopes[70] = [-6000, 75, 90];
-    }
-
-
-
-
+    uint private _nonvolumetricSettingsDivisor = 100; // to divide a, b, and k by
+    int private _nonvolumetricA = 1500; 
+    int private _nonvolumetricB = 410;
+    int private _nonvolumetricK = 450;
 
     /// @notice Checks if the amount provided exceeds the whale threshold.
     ///

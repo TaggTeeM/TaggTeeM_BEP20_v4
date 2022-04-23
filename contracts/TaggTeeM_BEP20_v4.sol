@@ -85,6 +85,9 @@ contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, Pausable, AccessControl, ERC
 
         // mint 100b tokens at 10^decimals() decimals
         _mint(_msgSender(), 100000000000 * 10 ** decimals());
+
+        // default total public supply is 25% of total supply
+        setTotalPublicSupply(totalSupply().mul(25).div(100));
     }
 
     /// @notice Pauses coin trading.
