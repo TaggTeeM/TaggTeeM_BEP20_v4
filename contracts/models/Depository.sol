@@ -164,14 +164,6 @@ contract Depository is AccessControl {
     virtual
     returns (uint)
     {
-        address msgSender = _msgSender();
-
-        // only special roles can get the total restricted coin count for other people
-        if (account != msgSender)
-            require(hasRole(Constants.LOCKBOX_ADMIN, msgSender)
-                || hasRole(Constants.AIRDROPPER_ROLE, msgSender)
-                || hasRole(Constants.OWNER_ROLE, msgSender), "TTM: Insufficient permissions to get the total restricted coin count for other accounts.");
-
         return _restrictedCoinsTotal[account];
     }
 
@@ -206,13 +198,13 @@ contract Depository is AccessControl {
         require (beneficiary != address(0), "TTM: Lockbox beneficiary invalid.");
 
         // create and populate a new lockbox
-        Lockbox memory newLockbox;
-
-        newLockbox.balance = amount;
-        newLockbox.lockboxId = _lockboxDepository[beneficiary].length;
-        newLockbox.beneficiary = beneficiary;
-        newLockbox.releaseTime = block.timestamp.add(duration);
-        newLockbox.creator = requester;
+        Lockbox memory newLockbox = Lockbox({
+            balance: amount,
+            lockboxId: _lockboxDepository[beneficiary].length,
+            beneficiary: beneficiary,
+            releaseTime: block.timestamp.add(duration),
+            creator: requester
+        });
 
         // add the lockbox to this beneficiary's depository
         _lockboxDepository[beneficiary].push(newLockbox);

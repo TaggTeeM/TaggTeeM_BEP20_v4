@@ -8,15 +8,16 @@ pragma solidity ^0.8.0;
 import "./ABDKMathQuad.sol";
 
 library Algorithms {
-    function LogarithmicAlgoNatural(uint balance, uint _nonvolumetricSettingsDivisor, int _nonvolumetricA, int _nonvolumetricB, int _nonvolumetricK)
-    public
+    function LogarithmicAlgoNaturalQuad(uint percentageOwned, uint _nonvolumetricSettingsDivisor, int _nonvolumetricA, int _nonvolumetricB, int _nonvolumetricK)
+    internal
     pure
     returns (uint)
     {
         bytes16 quadDivisor = ABDKMathQuad.fromUInt(_nonvolumetricSettingsDivisor);
 
-        bytes16 maximumSpend = ABDKMathQuad.add(ABDKMathQuad.mul(ABDKMathQuad.div(ABDKMathQuad.fromInt(_nonvolumetricA), quadDivisor), ABDKMathQuad.ln(ABDKMathQuad.mul(ABDKMathQuad.fromUInt(balance), ABDKMathQuad.div(ABDKMathQuad.fromInt(_nonvolumetricK), quadDivisor)))), ABDKMathQuad.div(ABDKMathQuad.fromInt(_nonvolumetricB), quadDivisor));
+        // R = a * ln(O * k) + b
+        bytes16 restrictedPercent = ABDKMathQuad.add(ABDKMathQuad.mul(ABDKMathQuad.div(ABDKMathQuad.fromInt(_nonvolumetricA), quadDivisor), ABDKMathQuad.ln(ABDKMathQuad.mul(ABDKMathQuad.fromUInt(percentageOwned), ABDKMathQuad.div(ABDKMathQuad.fromInt(_nonvolumetricK), quadDivisor)))), ABDKMathQuad.div(ABDKMathQuad.fromInt(_nonvolumetricB), quadDivisor));
 
-        return ABDKMathQuad.toUInt(maximumSpend);
+        return ABDKMathQuad.toUInt(restrictedPercent);
     }
 }

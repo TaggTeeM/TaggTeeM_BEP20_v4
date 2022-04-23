@@ -253,7 +253,7 @@ contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, Pausable, AccessControl, ERC
     view
     returns (uint)
     {
-        return balanceOf(account);
+        return super.balanceOf(account);
     }
 
     /// @notice Performs appropriate limitation checks and cleanup when transferring coins.
@@ -1009,7 +1009,7 @@ contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, Pausable, AccessControl, ERC
     override
     returns (Lockbox memory)
     {
-        require (balanceOf(beneficiary).sub(restrictedCoins(beneficiary)) >= amount, "TTM: Insufficient funds to create new lockbox.");
+        require (balanceOf(beneficiary) >= amount, "TTM: Insufficient balance to fund new lockbox.");
 
         return super.addLockbox(requester, beneficiary, amount, lockLengthSeconds);
     }
