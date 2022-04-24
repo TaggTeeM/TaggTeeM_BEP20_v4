@@ -3,7 +3,7 @@
  */
 
 pragma solidity ^0.8.0;
-// SPDX-License-Identifier: Unlicensed
+// SPDX-License-Identifier: MIT
 
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/utils/Context.sol";

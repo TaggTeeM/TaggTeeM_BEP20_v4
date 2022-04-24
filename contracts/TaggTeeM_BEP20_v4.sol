@@ -3,7 +3,7 @@
  */
 
 pragma solidity ^0.8.0;
-// SPDX-License-Identifier: Unlicensed
+// SPDX-License-Identifier: MIT
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
@@ -11,7 +11,6 @@ import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/draft-ERC20Permit.sol";
-import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Votes.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 
 import "./models/Depository.sol";
@@ -22,7 +21,7 @@ import "./models/Nonvolumetric.sol";
 ///
 /// @author John Daugherty
 ///
-contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, Pausable, AccessControl, ERC20Permit, ERC20Votes, Ownable, Depository, Nonvolumetric {
+contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, Pausable, AccessControl, ERC20Permit, Ownable, Depository, Nonvolumetric {
     using SafeMath for uint;
 
     // roles
@@ -176,7 +175,7 @@ contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, Pausable, AccessControl, ERC
     /// @param amount The amount of coin to send to the provided address.
     function _afterTokenTransfer(address from, address to, uint256 amount)
     internal
-    override(ERC20, ERC20Votes)
+    override
     {
         super._afterTokenTransfer(from, to, amount);
     }
@@ -195,7 +194,7 @@ contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, Pausable, AccessControl, ERC
     /// @param amount The amount of coin to send to the provided address.
     function _mint(address to, uint256 amount)
     internal
-    override(ERC20, ERC20Votes)
+    override
     {
         super._mint(to, amount);
     }
@@ -214,7 +213,7 @@ contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, Pausable, AccessControl, ERC
     /// @param amount The amount of coin to burn.
     function _burn(address account, uint256 amount)
     internal
-    override(ERC20, ERC20Votes)
+    override
     {
         super._burn(account, amount);
     }    
