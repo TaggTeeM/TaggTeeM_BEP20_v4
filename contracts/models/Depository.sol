@@ -2,12 +2,12 @@
  * Copyright © 2022 TaggTeem. ALL RIGHTS RESERVED.
  */
 
-pragma solidity ^0.8.0;
+pragma solidity 0.8.7;
 // SPDX-License-Identifier: MIT
 
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/utils/Context.sol";
-import "@openzeppelin/contracts/utils/math/SafeMath.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import "../../libraries/Constants.sol";
 
@@ -17,8 +17,6 @@ import "../../libraries/Constants.sol";
 /// @author John Daugherty
 ///
 contract Depository is AccessControl {
-    using SafeMath for uint;
-
     struct Lockbox {
         uint lockboxId;
         uint balance;
@@ -37,7 +35,14 @@ contract Depository is AccessControl {
     // events
     event AddedLockbox(Lockbox newLockbox);
     event WithdrawLockbox(address beneficiary, uint lockboxId, uint amount);
-    event CloseLockbox(address beneficiary, uint lockboxId);
+    event CloseLockbox(address beneficiary, uint lockboxId, bool emptyLockboxRemoved);
+
+    IERC20 private _parentContract;
+
+    constructor()
+    {
+        _parentContract = IERC20(address(this));
+    }
 
     /// @notice Sets the flag governing whether to remove lockboxes with 0 balances.
     ///
@@ -167,6 +172,47 @@ contract Depository is AccessControl {
         return _restrictedCoinsTotal[account];
     }
 
+    /// @notice Adds a new lockbox on the caller's wallet and funds it.
+    ///
+    /// @dev Checks that the caller's wallet (minus restricted coins) has enough coin to fund the lockbox.
+    ///
+    /// Requirements:
+    /// - .
+    ///
+    /// Caveats:
+    /// - .
+    ///
+    /// @param amount The amount to fund the lockbox for.
+    /// @param lockLengthSeconds The length of time the lockbox will be locked, in seconds.
+    /// @return NewLockbox The new lockbox details.
+    function addLockbox(uint amount, uint lockLengthSeconds)
+    public
+    returns (Lockbox memory)
+    {
+        return addLockbox(_msgSender(), _msgSender(), amount, lockLengthSeconds);
+    }
+
+    /// @notice Adds a new lockbox on the beneficiary's wallet and funds it.
+    ///
+    /// @dev Checks that the beneficiary's wallet (minus restricted coins) has enough coin to fund the lockbox.
+    ///
+    /// Requirements:
+    /// - Must have at least one of LOCKBOX_ADMIN, AIRDROPPER_ROLE, or OWNER_ROLE roles.
+    ///
+    /// Caveats:
+    /// - .
+    ///
+    /// @param beneficiary The address to make the lockbox on/for.
+    /// @param amount The amount to fund the lockbox for.
+    /// @param lockLengthSeconds The length of time the lockbox will be locked, in seconds.
+    /// @return NewLockbox The new lockbox details.
+    function addLockbox(address beneficiary, uint amount, uint lockLengthSeconds)
+    public
+    returns (Lockbox memory)
+    {
+        return addLockbox(_msgSender(), beneficiary, amount, lockLengthSeconds);
+    }
+
     /// @notice Adds a new lockbox on the beneficiary's wallet and funds it.
     ///
     /// @dev Checks if the requester is the same as the beneficiary, does some sanity checking, creates a new lockbox, adds the lockbox to
@@ -188,6 +234,8 @@ contract Depository is AccessControl {
     virtual
     returns (Lockbox memory)
     {
+        require (_parentContract.balanceOf(beneficiary) >= amount, "TTM: Insufficient balance to fund new lockbox.");
+
         // only special roles can make lockboxes for other people
         if (beneficiary != requester)
             require (hasRole(Constants.LOCKBOX_ADMIN, requester) 
@@ -202,7 +250,7 @@ contract Depository is AccessControl {
             balance: amount,
             lockboxId: _lockboxDepository[beneficiary].length,
             beneficiary: beneficiary,
-            releaseTime: block.timestamp.add(duration),
+            releaseTime: block.timestamp + duration,
             creator: requester
         });
 
@@ -299,11 +347,11 @@ contract Depository is AccessControl {
         require (block.timestamp >= _lockboxDepository[beneficiary][lockboxId].releaseTime, "TTM: Timelock has not expired on this lockbox.");
 
         // figure out what the final balance is
-        uint finalBalance = lockboxBalance.sub(amount);
+        uint finalBalance = lockboxBalance - amount;
 
         // update lockbox and total restricted coin count
         _lockboxDepository[beneficiary][lockboxId].balance = finalBalance;
-        _restrictedCoinsTotal[beneficiary] = _restrictedCoinsTotal[beneficiary].sub(amount);
+        _restrictedCoinsTotal[beneficiary] = _restrictedCoinsTotal[beneficiary] - amount;
 
         if (finalBalance <= 0)
         {
@@ -316,7 +364,7 @@ contract Depository is AccessControl {
             }
     
             // emit event whether we're removing empty lockboxes or not so that we can indicate a lockbox is finished
-            emit CloseLockbox(beneficiary, lockboxId);
+            emit CloseLockbox(beneficiary, lockboxId, _removeEmptyLockboxes);
         }
         else
             emit WithdrawLockbox(beneficiary, lockboxId, amount);

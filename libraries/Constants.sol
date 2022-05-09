@@ -2,7 +2,7 @@
  * Copyright © 2022 TaggTeem. ALL RIGHTS RESERVED.
  */
 
-pragma solidity ^0.8.0;
+pragma solidity 0.8.7;
 // SPDX-License-Identifier: MIT
 
 library Constants {
@@ -18,4 +18,5 @@ library Constants {
     bytes32 public constant IFC_TAX_ADMIN = keccak256("IFC_TAX_ADMIN");
     bytes32 public constant SALES_HISTORY_ADMIN = keccak256("SALES_HISTORY_ADMIN");
     bytes32 public constant LOCKBOX_ADMIN = keccak256("LOCKBOX_ADMIN");
+    bytes32 public constant SWAPBACK_ADMIN = keccak256("SWAPBACK_ADMIN");
 }
