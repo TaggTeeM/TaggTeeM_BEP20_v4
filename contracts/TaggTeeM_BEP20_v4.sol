@@ -14,10 +14,11 @@ import "@openzeppelin/contracts/token/ERC20/extensions/draft-ERC20Permit.sol";
 
 import "./models/Depository.sol";
 import "./models/Nonvolumetric.sol";
-import "./models/SwapbackToken.sol";
+import "./models/PresaleRestrictionToken.sol";
 import "./models/TaxableToken.sol";
 import "./models/AirdroppedToken.sol";
 import "./models/FounderToken.sol";
+import "./models/SalesTracker.sol";
 import "../libraries/Constants.sol";
 
 ///
@@ -25,48 +26,28 @@ import "../libraries/Constants.sol";
 ///
 /// @author John Daugherty
 ///
-contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, ERC20Permit, Ownable, Depository, Nonvolumetric, TaxableToken, SwapbackToken, AirdroppedToken, FounderToken {
-    // roles
-    bytes32 public constant OWNER_ROLE = keccak256("OWNER_ROLE");
-    bytes32 public constant FOUNDER_ROLE = keccak256("FOUNDER_ROLE");
-    bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
-    bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
-    bytes32 public constant SECURITY_ADMIN = keccak256("SECURITY_ADMIN");
-    bytes32 public constant NONVOLUMETRIC_ADMIN = keccak256("NONVOLUMETRIC_ADMIN");
-    bytes32 public constant AIRDROPPER_ROLE = keccak256("AIRDROPPER_ROLE");
-    bytes32 public constant RESTRICTION_ADMIN = keccak256("RESTRICTION_ADMIN");
-    bytes32 public constant IFC_TAX_ADMIN = keccak256("IFC_TAX_ADMIN");
-    bytes32 public constant SALES_HISTORY_ADMIN = keccak256("SALES_HISTORY_ADMIN");
-    bytes32 public constant LOCKBOX_ADMIN = keccak256("LOCKBOX_ADMIN");
-    bytes32 public constant SWAPBACK_ADMIN = keccak256("SWAPBACK_ADMIN");
-
-    uint private _salesTrackerTimeline = 24 * 60 * 60; // 24 hours
-
-    // restriction trackers
-    mapping (address => uint) private _lastTransferDate;
-    mapping (address => uint) private _transferTotals;
-
+contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, ERC20Permit, Ownable, Depository, Nonvolumetric, TaxableToken, PresaleRestrictionToken, AirdroppedToken, FounderToken, SalesTracker {
     constructor () ERC20("TaggTeeM", "TTM") ERC20Permit("TaggTeeM") {
         // grant token creator some basic permissions
         _grantRole(DEFAULT_ADMIN_ROLE, _msgSender());
-        grantRole(MINTER_ROLE, _msgSender());
-        grantRole(OWNER_ROLE, _msgSender());
-        grantRole(PAUSER_ROLE, _msgSender());
-        grantRole(SECURITY_ADMIN, _msgSender());
+        grantRole(Constants.MINTER_ROLE, _msgSender());
+        grantRole(Constants.OWNER_ROLE, _msgSender());
+        grantRole(Constants.PAUSER_ROLE, _msgSender());
+        grantRole(Constants.SECURITY_ADMIN, _msgSender());
 
         // reassign admin role for all roles to SECURITY_ADMIN
-        setRoleAdmin(OWNER_ROLE, SECURITY_ADMIN);
-        setRoleAdmin(FOUNDER_ROLE, SECURITY_ADMIN);
-        setRoleAdmin(PAUSER_ROLE, SECURITY_ADMIN);
-        setRoleAdmin(MINTER_ROLE, SECURITY_ADMIN);
-        setRoleAdmin(SECURITY_ADMIN, SECURITY_ADMIN);
-        setRoleAdmin(NONVOLUMETRIC_ADMIN, SECURITY_ADMIN);
-        setRoleAdmin(AIRDROPPER_ROLE, SECURITY_ADMIN);
-        setRoleAdmin(RESTRICTION_ADMIN, SECURITY_ADMIN);
-        setRoleAdmin(IFC_TAX_ADMIN, SECURITY_ADMIN);
-        setRoleAdmin(SALES_HISTORY_ADMIN, SECURITY_ADMIN);
-        setRoleAdmin(LOCKBOX_ADMIN, SECURITY_ADMIN);
-        setRoleAdmin(SWAPBACK_ADMIN, SECURITY_ADMIN);
+        setRoleAdmin(Constants.OWNER_ROLE, Constants.SECURITY_ADMIN);
+        setRoleAdmin(Constants.FOUNDER_ROLE, Constants.SECURITY_ADMIN);
+        setRoleAdmin(Constants.PAUSER_ROLE, Constants.SECURITY_ADMIN);
+        setRoleAdmin(Constants.MINTER_ROLE, Constants.SECURITY_ADMIN);
+        setRoleAdmin(Constants.SECURITY_ADMIN, Constants.SECURITY_ADMIN);
+        setRoleAdmin(Constants.NONVOLUMETRIC_ADMIN, Constants.SECURITY_ADMIN);
+        setRoleAdmin(Constants.AIRDROPPER_ROLE, Constants.SECURITY_ADMIN);
+        setRoleAdmin(Constants.RESTRICTION_ADMIN, Constants.SECURITY_ADMIN);
+        setRoleAdmin(Constants.IFC_TAX_ADMIN, Constants.SECURITY_ADMIN);
+        setRoleAdmin(Constants.SALES_HISTORY_ADMIN, Constants.SECURITY_ADMIN);
+        setRoleAdmin(Constants.LOCKBOX_ADMIN, Constants.SECURITY_ADMIN);
+        setRoleAdmin(Constants.SWAPBACK_ADMIN, Constants.SECURITY_ADMIN);
 
         // mint 100b tokens at 10^decimals() decimals
         _mint(_msgSender(), 100000000000 * 10 ** decimals());
@@ -80,7 +61,7 @@ contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, ERC20Permit, Ownable, Deposi
     /// @dev Calls parent pause function.
     function pause() 
     public 
-    onlyRole(PAUSER_ROLE) 
+    onlyRole(Constants.PAUSER_ROLE) 
     {
         _pause();
     }
@@ -90,7 +71,7 @@ contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, ERC20Permit, Ownable, Deposi
     /// @dev Calls parent unpause function.
     function unpause() 
     public 
-    onlyRole(PAUSER_ROLE) 
+    onlyRole(Constants.PAUSER_ROLE) 
     {
         _unpause();
     }
@@ -100,7 +81,7 @@ contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, ERC20Permit, Ownable, Deposi
     /// @dev Calls parent minting function.
     function mint(address to,  uint256 amount) 
     public 
-    onlyRole(MINTER_ROLE) 
+    onlyRole(Constants.MINTER_ROLE) 
     {
         _mint(to, amount);
     }
@@ -187,18 +168,16 @@ contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, ERC20Permit, Ownable, Deposi
     whenNotPaused
     {
         bool isFounderTransfer = false;
-        uint lastMidnight = _salesTrackerTimeline == 0 ? block.timestamp : (block.timestamp / _salesTrackerTimeline) * _salesTrackerTimeline;
         uint tradableBalance = balanceOf(from);
 
         // reset sales counts every day at midnight
-        if (_lastTransferDate[from] < lastMidnight)
-            _transferTotals[from] = 0;
+        uint lastMidnight = resetSalesTracker(from);
 
         // check if holder is a founder and is selling bonus coins (non-bonus coins are governed by active holder restrictions)
         if (founderCoinBalance(from) > 0 && founderBonusRestrictionPercentage() > 0 && founderCoinBalance(from) >= (founderCoinCounter(from) * founderRestrictionPercentage()) / 100)
         {
             // if founder bonus coins, restrict sales per day
-            require (((amount + _transferTotals[from]) * 100) / founderCoinCounter(from) < founderBonusRestrictionPercentage(), "TTM: Trade exceeds daily limit for founder bonus coins.");
+            require (((amount + salesTrackerTotal(from)) * 100) / founderCoinCounter(from) < founderBonusRestrictionPercentage(), "TTM: Trade exceeds daily limit for founder bonus coins.");
 
             isFounderTransfer = true;
         } 
@@ -228,54 +207,6 @@ contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, ERC20Permit, Ownable, Deposi
             reduceFounderBalanceBy(from, amount);
         
         // record the trade for this user
-        if (amount != 0)
-        {
-            _lastTransferDate[from] = lastMidnight;
-            _transferTotals[from] += amount;
-        }
-    }
-
-    /// @notice Updates the default sales tracker timeline.
-    ///
-    /// @dev Checks that the new timeline amount is positive, then sets the default sales tracker timeline.
-    ///
-    /// Requirements:
-    /// - Must have SALES_HISTORY_ADMIN role.
-    ///
-    /// Caveats:
-    /// - .
-    ///
-    /// @param salesTrackerTimeline The new default sales tracker timeline.
-    /// @return Whether the default sales tracker timeline was successfully set.
-    function setSalesTrackerTimeline(uint salesTrackerTimeline)
-    public
-    onlyRole(SALES_HISTORY_ADMIN)
-    returns (bool)
-    {
-        // require that the new restriction is positive, 0 turns off restrictions
-        require (salesTrackerTimeline >= 0, "TTM: Sales tracker timeline must be positive.");
-
-        // update restriction timeline
-        _salesTrackerTimeline = salesTrackerTimeline;
-
-        return true;
-    }
-
-    /// @notice Gets the default sales tracker timeline.
-    ///
-    /// Requirements:
-    /// - Must have SALES_HISTORY_ADMIN role.
-    ///
-    /// Caveats:
-    /// - .
-    ///
-    /// @return The current default sales tracker timeline.
-    function getSalesTrackerTimeline() 
-    public
-    view
-    onlyRole(SALES_HISTORY_ADMIN)
-    returns (uint)
-    {
-        return _salesTrackerTimeline;
+        recordSale(from, amount, lastMidnight);
     }
 }

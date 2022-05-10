@@ -13,23 +13,18 @@ import "@openzeppelin/contracts/security/Pausable.sol";
 
 import "./Depository.sol";
 import "../../libraries/Constants.sol";
-import "../interfaces/IPresaleSwapback.sol";
 
 ///
 /// @title TaggTeeM (TTM) token SWAPBACKTOKEN contract
 ///
 /// @author John Daugherty
 ///
-contract SwapbackToken is AccessControl, Pausable, IPresaleSwapback {
+contract PresaleRestrictionToken is AccessControl, Pausable {
+    // presales restriction settings
     uint private _presalesRestrictionTimeline = 8 * 30 * 24 * 60 * 60; // 8 months
     uint private _presalesRestrictionPercentage = 75; // 75%
 
-    // swapback settings
-    address private _authorizedSwapbackCaller;
-
     IERC20 private _parentContract;
-
-    event SwapbackApproval(uint amount);
 
     constructor() 
     {
@@ -42,93 +37,6 @@ contract SwapbackToken is AccessControl, Pausable, IPresaleSwapback {
     returns (uint)
     {
         return _presalesRestrictionTimeline;
-    }
-
-    /// @notice Requests presale swapback approval, but the request MUST come from the authorized address.
-    ///
-    /// @dev Checks that the caller is the authorized swapback requester, then attempts to secure approval
-    ///      for third-party allowance. At that point, the presale token will send the main token to the sender
-    ///
-    /// Requirements:
-    /// - .
-    ///
-    /// Caveats:
-    /// - .
-    ///
-    /// @param amount The exact amount to authorize swapback for.
-    /// @return Whether the amount was approved.
-    function requestSwapbackApproval(uint amount) 
-    public
-    override
-    returns (bool)
-    {
-        require (_authorizedSwapbackCaller != address(0), "TTM: No authorized swapback caller address set.");
-        require (_msgSender() == _authorizedSwapbackCaller, "TTM: Requester is not the authorized swapback caller.");
-
-
-
-
-            // request allowance of TTM (authorization set on other end)
-            //require (IPresaleSwapback(_swapbackTargetWallet).requestSwapbackApproval(amount), "TTP: Swapback not approved at this time.");
-
-            // transfer exact amount of allowance
-            //IERC20(_swapbackTargetWallet).transferFrom(Ownable(_swapbackTargetWallet).owner(), to, amount);
-
-
-
-
-
-
-
-
-
-
-        IERC20(address(this)).approve(_authorizedSwapbackCaller, amount);
-        IERC20(address(this)).transferFrom(Ownable(address(this)).owner(), _authorizedSwapbackCaller, amount);
-
-        emit SwapbackApproval(amount);
-
-        return true;
-    }
-
-    /// @notice Updates the authorized swapback caller.
-    ///
-    /// @dev Sets the authorized swapback caller.
-    ///
-    /// Requirements:
-    /// - Must have SWAPBACK_ADMIN role.
-    ///
-    /// Caveats:
-    /// - .
-    ///
-    /// @param authorizedSwapbackCaller The new authorized swapback caller.
-    /// @return Whether the authorized swapback caller was successfully set.
-    function setAuthorizedSwapbackCaller(address authorizedSwapbackCaller)
-    public
-    onlyRole(Constants.SWAPBACK_ADMIN)
-    returns (bool)
-    {
-        _authorizedSwapbackCaller = authorizedSwapbackCaller;
-
-        return true;
-    }
-
-    /// @notice Gets the authorized swapback caller.
-    ///
-    /// Requirements:
-    /// - Must have SWAPBACK_ADMIN role.
-    ///
-    /// Caveats:
-    /// - .
-    ///
-    /// @return The current authorized swapback caller.
-    function getAuthorizedSwapbackCaller() 
-    public
-    view
-    onlyRole(Constants.SWAPBACK_ADMIN)
-    returns (address)
-    {
-        return _authorizedSwapbackCaller;
     }
     
     /// @notice Transfers amount of coins to the provided address with appropriate preslaes restrictions.

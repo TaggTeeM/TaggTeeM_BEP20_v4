@@ -9,3 +9,6 @@ contracts/artifacts/
 #/.deps
 */artifacts/*
 /.deps/npm/@openzeppelin/contracts/token/ERC20/artifacts
+contracts/interfaces/artifacts/build-info/65e3745a52c3c14bf2f42a6677280229.json
+contracts/interfaces/artifacts/IPresaleSwapback.json
+contracts/interfaces/artifacts/IPresaleSwapback_metadata.json

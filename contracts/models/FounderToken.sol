@@ -16,7 +16,7 @@ import "./Depository.sol";
 ///
 /// @author John Daugherty
 ///
-contract FounderToken is AccessControl {
+contract FounderToken is AccessControl, Depository {
     // founder coins
     uint private _founderRestrictionPercentage = 75; // 75%
     uint private _founderRestrictionTimeline = 6 * 30 * 24 * 60 * 60; // 6 months
