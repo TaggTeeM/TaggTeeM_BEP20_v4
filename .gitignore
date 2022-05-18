@@ -12,3 +12,14 @@ contracts/artifacts/
 contracts/interfaces/artifacts/build-info/65e3745a52c3c14bf2f42a6677280229.json
 contracts/interfaces/artifacts/IPresaleSwapback.json
 contracts/interfaces/artifacts/IPresaleSwapback_metadata.json
+contracts/interfaces/artifacts/build-info/053b81a8e73f2a6d262ad0dd76a37404.json
+contracts/interfaces/artifacts/build-info/30c33e0188e6afcce4f8ae20500006d9.json
+contracts/interfaces/artifacts/build-info/5e6ace602512abf618e34e3e0f92186e.json
+contracts/interfaces/artifacts/build-info/987429a091a0b06077e91a8c2d285167.json
+contracts/interfaces/artifacts/build-info/9e79ff594b9c073a776d5bce206c4bd3.json
+contracts/interfaces/artifacts/build-info/dbe32a298b858cfe9def0c263e3280b9.json
+contracts/interfaces/artifacts/build-info/e7e9d18d5b8bb909b0e6a0e129dc0811.json
+contracts/interfaces/artifacts/IDepository.json
+contracts/interfaces/artifacts/IDepository_metadata.json
+contracts/interfaces/artifacts/IERC20Extended.json
+contracts/interfaces/artifacts/IERC20Extended_metadata.json

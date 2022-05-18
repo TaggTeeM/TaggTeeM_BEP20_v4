@@ -7,7 +7,6 @@ pragma solidity 0.8.7;
 
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/utils/Context.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import "../../libraries/Constants.sol";
 
@@ -17,32 +16,17 @@ import "../../libraries/Constants.sol";
 /// @author John Daugherty
 ///
 contract Depository is AccessControl {
-    struct Lockbox {
-        uint lockboxId;
-        uint balance;
-        uint releaseTime;
-        address beneficiary;
-        address creator;
-    }
-
     // transactions tracker
-    mapping (address => Lockbox[]) private _lockboxDepository;
+    mapping (address => Constants.Lockbox[]) private _lockboxDepository;
     mapping (address => uint) private _restrictedCoinsTotal;
 
     // empty lockbox options
     bool private _removeEmptyLockboxes = true;
 
     // events
-    event AddedLockbox(Lockbox newLockbox);
+    event AddedLockbox(Constants.Lockbox newLockbox);
     event WithdrawLockbox(address beneficiary, uint lockboxId, uint amount);
     event CloseLockbox(address beneficiary, uint lockboxId, bool emptyLockboxRemoved);
-
-    IERC20 private _parentContract;
-
-    constructor()
-    {
-        _parentContract = IERC20(address(this));
-    }
 
     /// @notice Sets the flag governing whether to remove lockboxes with 0 balances.
     ///
@@ -100,7 +84,7 @@ contract Depository is AccessControl {
     function getLockboxList()
     public
     view
-    returns (Lockbox[] memory)
+    returns (Constants.Lockbox[] memory)
     {
         return getLockboxList(_msgSender());
     }
@@ -121,7 +105,7 @@ contract Depository is AccessControl {
     public
     view
     virtual
-    returns (Lockbox[] memory)
+    returns (Constants.Lockbox[] memory)
     {
         address msgSender = _msgSender();
 
@@ -172,47 +156,6 @@ contract Depository is AccessControl {
         return _restrictedCoinsTotal[account];
     }
 
-    /// @notice Adds a new lockbox on the caller's wallet and funds it.
-    ///
-    /// @dev Checks that the caller's wallet (minus restricted coins) has enough coin to fund the lockbox.
-    ///
-    /// Requirements:
-    /// - .
-    ///
-    /// Caveats:
-    /// - .
-    ///
-    /// @param amount The amount to fund the lockbox for.
-    /// @param lockLengthSeconds The length of time the lockbox will be locked, in seconds.
-    /// @return NewLockbox The new lockbox details.
-    function addLockbox(uint amount, uint lockLengthSeconds)
-    public
-    returns (Lockbox memory)
-    {
-        return addLockbox(_msgSender(), _msgSender(), amount, lockLengthSeconds);
-    }
-
-    /// @notice Adds a new lockbox on the beneficiary's wallet and funds it.
-    ///
-    /// @dev Checks that the beneficiary's wallet (minus restricted coins) has enough coin to fund the lockbox.
-    ///
-    /// Requirements:
-    /// - Must have at least one of LOCKBOX_ADMIN, AIRDROPPER_ROLE, or OWNER_ROLE roles.
-    ///
-    /// Caveats:
-    /// - .
-    ///
-    /// @param beneficiary The address to make the lockbox on/for.
-    /// @param amount The amount to fund the lockbox for.
-    /// @param lockLengthSeconds The length of time the lockbox will be locked, in seconds.
-    /// @return NewLockbox The new lockbox details.
-    function addLockbox(address beneficiary, uint amount, uint lockLengthSeconds)
-    public
-    returns (Lockbox memory)
-    {
-        return addLockbox(_msgSender(), beneficiary, amount, lockLengthSeconds);
-    }
-
     /// @notice Adds a new lockbox on the beneficiary's wallet and funds it.
     ///
     /// @dev Checks if the requester is the same as the beneficiary, does some sanity checking, creates a new lockbox, adds the lockbox to
@@ -232,10 +175,8 @@ contract Depository is AccessControl {
     function addLockbox(address requester, address beneficiary, uint amount, uint duration)
     internal
     virtual
-    returns (Lockbox memory)
+    returns (Constants.Lockbox memory)
     {
-        require (_parentContract.balanceOf(beneficiary) >= amount, "TTM: Insufficient balance to fund new lockbox.");
-
         // only special roles can make lockboxes for other people
         if (beneficiary != requester)
             require (hasRole(Constants.LOCKBOX_ADMIN, requester) 
@@ -246,7 +187,7 @@ contract Depository is AccessControl {
         require (beneficiary != address(0), "TTM: Lockbox beneficiary invalid.");
 
         // create and populate a new lockbox
-        Lockbox memory newLockbox = Lockbox({
+        Constants.Lockbox memory newLockbox = Constants.Lockbox({
             balance: amount,
             lockboxId: _lockboxDepository[beneficiary].length,
             beneficiary: beneficiary,

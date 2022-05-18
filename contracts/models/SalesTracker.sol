@@ -5,7 +5,6 @@
 pragma solidity 0.8.7;
 // SPDX-License-Identifier: MIT
 
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Context.sol";
@@ -23,13 +22,6 @@ contract SalesTracker is AccessControl {
 
     mapping (address => uint) private _lastTransferDate;
     mapping (address => uint) private _transferTotals;
-
-    IERC20 private _parentContract;
-
-    constructor() 
-    {
-        _parentContract = IERC20(address(this));
-    }
 
     /// @notice Gets the provided user's sales tracker total.
     ///

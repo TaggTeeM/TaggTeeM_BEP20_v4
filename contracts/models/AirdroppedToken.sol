@@ -8,11 +8,9 @@ pragma solidity 0.8.7;
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/utils/Context.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import "../../libraries/Constants.sol";
 import "../../libraries/Algorithms.sol";
-import "./Depository.sol";
 
 ///
 /// @title TaggTeeM (TTM) token AIRDROPPEDTOKEN contract
@@ -23,13 +21,6 @@ contract AirdroppedToken is AccessControl, Pausable {
     // restrictions settings
     uint private _restrictionTimeline = 6 * 30 * 24 * 60 * 60; // 6 months
     uint private _airdropRestrictionPercentage = 75; // 75%
-
-    IERC20 private _parentContract;
-
-    constructor()
-    {
-        _parentContract = IERC20(address(this));
-    }
 
     function restrictionTimeline()
     internal
@@ -45,33 +36,6 @@ contract AirdroppedToken is AccessControl, Pausable {
     returns (uint)
     {
         return _airdropRestrictionPercentage;
-    }
-
-    /// @notice Transfers _value amount of coins to the provided address with appropriate holder restrictions.
-    ///
-    /// @dev First verifies transfer, then adds coins to the restricted list.
-    ///
-    /// Requirements:
-    /// - Must have AIRDROPPER_ROLE role.
-    ///
-    /// Caveats:
-    /// - .
-    ///
-    /// @param to The address to airdrop to.
-    /// @param amount The amount of coin to send to the provided address.
-    /// @return Whether the transfer was a success.
-    function airdrop(address to, uint256 amount)
-    public
-    whenNotPaused
-    onlyRole(Constants.AIRDROPPER_ROLE)
-    returns (bool)
-    {
-        require(_parentContract.transfer(to, amount));
-
-        // add to restricted list
-        Depository(address(this)).addLockbox(to, (amount * _airdropRestrictionPercentage) / 100, _restrictionTimeline);
-
-        return true;
     }
 
     /// @notice Updates the active restriction timeline.

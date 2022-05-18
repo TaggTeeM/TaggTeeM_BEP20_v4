@@ -6,6 +6,17 @@ pragma solidity 0.8.7;
 // SPDX-License-Identifier: MIT
 
 library Constants {
+    /**
+    * @dev Lockbox structure.
+    */
+    struct Lockbox {
+        uint lockboxId;
+        uint balance;
+        uint releaseTime;
+        address beneficiary;
+        address creator;
+    }
+
     // roles
     bytes32 public constant OWNER_ROLE = keccak256("OWNER_ROLE");
     bytes32 public constant FOUNDER_ROLE = keccak256("FOUNDER_ROLE");
@@ -15,8 +26,7 @@ library Constants {
     bytes32 public constant NONVOLUMETRIC_ADMIN = keccak256("NONVOLUMETRIC_ADMIN");
     bytes32 public constant AIRDROPPER_ROLE = keccak256("AIRDROPPER_ROLE");
     bytes32 public constant RESTRICTION_ADMIN = keccak256("RESTRICTION_ADMIN");
-    bytes32 public constant IFC_TAX_ADMIN = keccak256("IFC_TAX_ADMIN");
+    bytes32 public constant TAX_ADMIN = keccak256("TAX_ADMIN");
     bytes32 public constant SALES_HISTORY_ADMIN = keccak256("SALES_HISTORY_ADMIN");
     bytes32 public constant LOCKBOX_ADMIN = keccak256("LOCKBOX_ADMIN");
-    bytes32 public constant SWAPBACK_ADMIN = keccak256("SWAPBACK_ADMIN");
 }

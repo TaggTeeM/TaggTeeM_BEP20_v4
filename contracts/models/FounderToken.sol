@@ -6,17 +6,15 @@ pragma solidity 0.8.7;
 // SPDX-License-Identifier: MIT
 
 import "@openzeppelin/contracts/access/AccessControl.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import "../../libraries/Constants.sol";
-import "./Depository.sol";
 
 ///
 /// @title TaggTeeM (TTM) token FOUNDERTOKEN contract
 ///
 /// @author John Daugherty
 ///
-contract FounderToken is AccessControl, Depository {
+contract FounderToken is AccessControl {
     // founder coins
     uint private _founderRestrictionPercentage = 75; // 75%
     uint private _founderRestrictionTimeline = 6 * 30 * 24 * 60 * 60; // 6 months
@@ -26,13 +24,6 @@ contract FounderToken is AccessControl, Depository {
     mapping (address => uint) private _founderCoinCounter;
     mapping (address => uint) private _founderCoinBalance;
     uint private _totalFounderCoinsIssued;
-
-    IERC20 private _parentContract;
-
-    constructor()
-    {
-        _parentContract = IERC20(address(this));
-    }
 
     function founderCoinBalance(address founderWallet)
     internal
@@ -66,6 +57,14 @@ contract FounderToken is AccessControl, Depository {
         return _founderRestrictionPercentage;
     }
 
+    function founderRestrictionTimeline()
+    internal
+    view
+    returns (uint)
+    {
+        return _founderRestrictionTimeline;
+    }
+
     function reduceFounderBalanceBy(address account, uint amount)
     internal
     returns (bool)
@@ -90,15 +89,10 @@ contract FounderToken is AccessControl, Depository {
     /// @return Whether the transfer was a success.
     function sendFounderCoins(address to, uint256 amount)
     public
+    virtual
     onlyRole(Constants.OWNER_ROLE)
     returns (bool)
     {
-        require(_parentContract.transfer(to, amount));
-
-        // mark 75% of coins as founder coins and add to restricted list using the founder restriction timeline
-        if (_founderRestrictionTimeline > 0)
-            Depository(address(this)).addLockbox(to, (amount * _founderRestrictionPercentage) / 100, _founderRestrictionTimeline);
-
         // keep track of founder coins
         _founderCoinCounter[to] += amount;
         _founderCoinBalance[to] += amount;
@@ -179,18 +173,18 @@ contract FounderToken is AccessControl, Depository {
     /// Caveats:
     /// - .
     ///
-    /// @param founderRestrictionTimeline The new founder restriction timeline.
+    /// @param newFounderRestrictionTimeline The new founder restriction timeline.
     /// @return Whether the founder restriction timeline was successfully set.
-    function setFounderRestrictionTimeline(uint founderRestrictionTimeline) 
+    function setFounderRestrictionTimeline(uint newFounderRestrictionTimeline) 
     public
     onlyRole(Constants.FOUNDER_ROLE)
     returns (bool)
     {
         // require that the new restriction is positive, 0 turns off restrictions
-        require (founderRestrictionTimeline >= 0, "TTM: Founder restriction timeline must be positive");
+        require (newFounderRestrictionTimeline >= 0, "TTM: Founder restriction timeline must be positive");
 
         // update restriction timeline
-        _founderRestrictionTimeline = founderRestrictionTimeline;
+        _founderRestrictionTimeline = newFounderRestrictionTimeline;
 
         return true;
     }

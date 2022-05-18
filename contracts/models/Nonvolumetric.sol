@@ -7,7 +7,6 @@ pragma solidity 0.8.7;
 
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/utils/Context.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import "../../libraries/Constants.sol";
 import "../../libraries/Algorithms.sol";
@@ -29,32 +28,6 @@ contract Nonvolumetric is AccessControl {
     int private _nonvolumetricA = 1500; 
     int private _nonvolumetricB = 410;
     int private _nonvolumetricK = 450;
-
-    IERC20 private _parentContract;
-
-    constructor()
-    {
-        _parentContract = IERC20(address(this));
-    }
-
-    /// @notice Checks if the balance of the address provided exceeds the whale threshold.
-    ///
-    /// @dev If the whale threshold is set to 0, always return false, otherwise check total public supply.
-    ///
-    /// Requirements:
-    /// - .
-    ///
-    /// Caveats:
-    /// - .
-    ///
-    /// @param account The balance of the address to check for whale threshold.
-    /// @return Whether the balance of the address exceeds the whale threshold.
-    function isWhale(address account) 
-    public 
-    view 
-    returns (bool) {
-        return isWhale(_parentContract.balanceOf(account));
-    }
 
     /// @notice Checks if the amount provided exceeds the whale threshold.
     ///
@@ -145,7 +118,6 @@ contract Nonvolumetric is AccessControl {
     onlyRole(Constants.OWNER_ROLE)
     returns (bool)
     {
-        require (totalPublicSupply <= _parentContract.totalSupply(), "TTM: Total public supply can't be greater than the total coin supply.");
         require (totalPublicSupply >= 0, "TTM: Total public supply can't be negative.");
 
         _totalPublicSupply = totalPublicSupply;
@@ -216,46 +188,6 @@ contract Nonvolumetric is AccessControl {
     returns (uint, int, int, int)
     {
         return (_nonvolumetricSettingsDivisor, _nonvolumetricA, _nonvolumetricB, _nonvolumetricK);
-    }
-
-    /// @notice Gets the nonvolumetric maximum nonrestricted coins for the caller.
-    ///
-    /// @dev Calls the internal function to get the maximum nonrestricted coins for the message sender.
-    ///
-    /// Requirements:
-    /// - .
-    ///
-    /// Caveats:
-    /// - .
-    ///
-    /// @return The total number of unrestricted coins for the caller.
-    function getNonvolumetricMaximum() 
-    public 
-    view
-    returns (uint) 
-    {
-        return getNonvolumetricMaximum(_parentContract.balanceOf(_msgSender()));
-    }
-
-    /// @notice Gets the nonvolumetric maximum nonrestricted coins for the provided address.
-    ///
-    /// @dev Calls the internal function to get the maximum nonrestricted coins.
-    ///
-    /// Requirements:
-    /// - Must have NONVOLUMETRIC_ADMIN role.
-    ///
-    /// Caveats:
-    /// - .
-    ///
-    /// @param account The address to get the maximum for.
-    /// @return The total number of unrestricted coins.
-    function getNonvolumetricMaximum(address account) 
-    public 
-    view
-    onlyRole(Constants.NONVOLUMETRIC_ADMIN)
-    returns (uint) 
-    {
-        return getNonvolumetricMaximum(_parentContract.balanceOf(account));
     }
 
     /// @notice Gets the nonvolumetric maximum nonrestricted coins for the provided amount.
