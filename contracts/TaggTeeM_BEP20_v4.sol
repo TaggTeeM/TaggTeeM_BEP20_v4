@@ -20,6 +20,8 @@ import "./models/AirdroppedToken.sol";
 import "./models/FounderToken.sol";
 import "./models/SalesTracker.sol";
 
+import "./interfaces/ITaggTeeM.sol";
+
 import "../libraries/Constants.sol";
 
 ///
@@ -27,7 +29,7 @@ import "../libraries/Constants.sol";
 ///
 /// @author John Daugherty
 ///
-contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, ERC20Permit, Ownable, Depository, Nonvolumetric, TaxableToken, PresaleRestrictionToken, AirdroppedToken, FounderToken, SalesTracker {
+contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, ERC20Permit, Ownable, Depository, Nonvolumetric, TaxableToken, PresaleRestrictionToken, AirdroppedToken, FounderToken, SalesTracker, ITaggTeeM {
     constructor () ERC20("TaggTeeM", "TTM") ERC20Permit("TaggTeeM") {
         // grant token creator some basic permissions
         _grantRole(DEFAULT_ADMIN_ROLE, _msgSender());
@@ -121,7 +123,7 @@ contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, ERC20Permit, Ownable, Deposi
     function balanceOf(address account) 
     public 
     view 
-    override 
+    override(ERC20, ITaggTeeM)
     returns (uint256) {
         return super.balanceOf(account) - restrictedCoins(account);
     }
@@ -146,10 +148,32 @@ contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, ERC20Permit, Ownable, Deposi
         return super.balanceOf(account);
     }
 
+    /// @notice Transfers specified amount of coint to the specified address.
+    ///
+    /// @dev Calls the overridden function.
+    ///
+    /// Requirements:
+    /// - .
+    ///
+    /// Caveats:
+    /// - .
+    ///
+    /// @param to The address to transfer the tokens to.
+    /// @param amount The of tokens to transfer.
+    /// @return Whether the transfer was successful.
+    function transfer(address to, uint256 amount) 
+    public
+    override(ERC20, ITaggTeeM)
+    returns (bool)
+    {
+        return super.transfer(to, amount);
+    }
+
+    /// @notice Transfers specified amount of coint to the specified address.
     /// @notice Performs appropriate limitation checks and cleanup when transferring coins.
     ///
     /// @dev First checks founder and nonvolumetric restrictions, then checks time restrictions before taking IFC
-    ///   tax and then verifying the transfer. Then, founder coins are reduced as necessary.
+    /// @dev tax and then verifying the transfer. Then, founder coins are reduced as necessary.
     ///
     /// Requirements:
     /// - Founder coins must follow restriction requirements.
@@ -163,8 +187,8 @@ contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, ERC20Permit, Ownable, Deposi
     /// @param to The address to transfer to.
     /// @param amount The amount of coin to send to the provided address.
     function _transfer(address from, address to, uint256 amount)
-    override
     internal
+    override
     whenNotPaused
     {
         bool isFounderTransfer = false;
@@ -190,9 +214,12 @@ contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, ERC20Permit, Ownable, Deposi
             require (amount <= tradableBalance, "TTM: Attempt to transfer restricted coins.");
 
         // IFC tax
-        if (from != owner() && taxAmount() > 0 && taxWallet() != address(0)) 
+        if (taxPercent() > 0                // make sure taxes are turned on
+            && taxWallet() != address(0)    // tax has a destination
+            && from != owner()              // don't tax owner transfers
+            && isTaxable(from))             // check the taxable status of the address
         {
-            uint taxAmount = (amount * taxAmount()) / 100;
+            uint taxAmount = (amount * taxPercent()) / 100;
 
             super._transfer(from, taxWallet(), taxAmount);
 
@@ -280,6 +307,7 @@ contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, ERC20Permit, Ownable, Deposi
     /// @return Whether the transfer was a success.
     function presalesAirdrop(address to, uint256 amount)
     public
+    override
     whenNotPaused
     onlyRole(Constants.AIRDROPPER_ROLE)
     returns (bool)

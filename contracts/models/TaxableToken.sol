@@ -15,25 +15,12 @@ import "../../libraries/Constants.sol";
 /// @author John Daugherty
 ///
 contract TaxableToken is AccessControl {
-    // Influencers For Change tax information
+    // tax settings
     address private _taxWallet = address(0);
-    uint private _taxAmount = 1; // 1%
+    uint private _taxPercent = 1; // 1%
 
-    function taxWallet()
-    internal
-    view
-    returns (address)
-    {
-        return _taxWallet;
-    }
-
-    function taxAmount()
-    internal
-    view
-    returns (uint)
-    {
-        return _taxAmount;
-    }
+    // store the "non-"taxable status because default bool is false and we want taxing on for everyone as default
+    mapping (address => bool) _nontaxableAddresses;
 
     /// @notice Updates the tax wallet address.
     ///
@@ -68,10 +55,9 @@ contract TaxableToken is AccessControl {
     /// - .
     ///
     /// @return The current tax wallet address.
-    function getTaxWallet() 
+    function taxWallet()
     public
     view
-    onlyRole(Constants.TAX_ADMIN)
     returns (address)
     {
         return _taxWallet;
@@ -87,16 +73,16 @@ contract TaxableToken is AccessControl {
     /// Caveats:
     /// - .
     ///
-    /// @param newTaxAmount The new tax amount.
+    /// @param newTaxPercent The new tax amount.
     /// @return Whether the tax amount was successfully set.
-    function setTaxAmount(uint newTaxAmount)
+    function setTaxPercent(uint newTaxPercent)
     public
     onlyRole(Constants.TAX_ADMIN)
     returns (bool)
     {
-        require (newTaxAmount >= 0, "TTM: tax amount must be positive or zero.");
+        require (newTaxPercent >= 0, "TTM: tax amount must be positive or zero.");
 
-        _taxAmount = newTaxAmount;
+        _taxPercent = newTaxPercent;
 
         return true;
     }
@@ -110,12 +96,56 @@ contract TaxableToken is AccessControl {
     /// - .
     ///
     /// @return The current tax amount.
-    function getTaxAmount() 
+    function taxPercent()
     public
     view
-    onlyRole(Constants.TAX_ADMIN)
     returns (uint)
     {
-        return _taxAmount;
+        return _taxPercent;
+    }
+
+    /// @notice Checks if an address is taxable.
+    ///
+    /// @dev Returns the opposite of the "non-"taxable status because default bool is false and we want taxing on for everyone as default.
+    ///
+    /// Requirements:
+    /// - .
+    ///
+    /// Caveats:
+    /// - .
+    ///
+    /// @param account The account to check the taxable status for.
+    /// @return Whether the account provided should be taxed.
+    function isTaxable(address account)
+    public
+    view
+    returns (bool)
+    {
+        // everyone is taxable unless otherwise specified
+        return !_nontaxableAddresses[account];
+    }
+
+    /// @notice Sets the taxable status of the specified account.
+    ///
+    /// @dev Stores the "non-"taxable status because default bool is false and we want taxing on for everyone as default.
+    ///
+    /// Requirements:
+    /// - Must have TAX_ADMIN role.
+    ///
+    /// Caveats:
+    /// - .
+    ///
+    /// @param account The new account to set the taxable status for.
+    /// @param taxableStatus The new taxable status.
+    /// @return Whether the taxable status was successfully set.
+    function setTaxableStatus(address account, bool taxableStatus)
+    public
+    onlyRole(Constants.TAX_ADMIN)
+    returns (bool)
+    {
+        // store the "non-"taxable status because default bool is false and we want taxing on for everyone as default
+        _nontaxableAddresses[account] = !taxableStatus;
+
+        return true;
     }
 }

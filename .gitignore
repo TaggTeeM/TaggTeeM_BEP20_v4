@@ -23,3 +23,9 @@ contracts/interfaces/artifacts/IDepository.json
 contracts/interfaces/artifacts/IDepository_metadata.json
 contracts/interfaces/artifacts/IERC20Extended.json
 contracts/interfaces/artifacts/IERC20Extended_metadata.json
+contracts/interfaces/artifacts/build-info/1d01e1f5464318d8973332069795f504.json
+contracts/interfaces/artifacts/build-info/8bb80ca032035e8a6c26fc871132f514.json
+contracts/interfaces/artifacts/build-info/bd79c4de72a5273dfc75a64cd60705c8.json
+contracts/interfaces/artifacts/build-info/bfe42da89d0e06e62c7d191f94a86f91.json
+contracts/interfaces/artifacts/ITaggTeeM.json
+contracts/interfaces/artifacts/ITaggTeeM_metadata.json
