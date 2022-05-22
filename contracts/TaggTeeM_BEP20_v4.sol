@@ -205,7 +205,7 @@ contract TaggTeeM_BEP20_v4 is ERC20, ERC20Burnable, ERC20Permit, Ownable, Deposi
 
             isFounderTransfer = true;
         } 
-        else if (from != owner())
+        else if (from != owner() && doWhaleCheck(from))
             // check for whale trade cap, ignoring caps for the owner
             require (amount < getNonvolumetricMaximum(tradableBalance), "TTM: Maximum daily trade cap reached for this wallet's staking tier.");
 

@@ -29,6 +29,26 @@ contract Nonvolumetric is AccessControl {
     int private _nonvolumetricB = 410;
     int private _nonvolumetricK = 450;
 
+    mapping (address => bool) _doWhaleChecks;
+
+    function doWhaleCheck(address account)
+    public
+    view
+    returns (bool)
+    {
+        return _doWhaleChecks[account];
+    }
+
+    function setWhaleCheckStatus(address account, bool doCheck)
+    public
+    onlyRole(Constants.NONVOLUMETRIC_ADMIN)
+    returns (bool)
+    {
+        _doWhaleChecks[account] = doCheck;
+
+        return true;
+    }
+
     /// @notice Checks if the amount provided exceeds the whale threshold.
     ///
     /// @dev If the whale threshold is set to 0, always return false, otherwise check total public supply.
@@ -214,7 +234,7 @@ contract Nonvolumetric is AccessControl {
         {
             uint restrictedPercent = Algorithms.LogarithmicAlgoNaturalQuad((amount * 100) / _totalPublicSupply, _nonvolumetricSettingsDivisor, _nonvolumetricA, _nonvolumetricB, _nonvolumetricK); //  * 10 ** decimals();
 
-            uint maximumSpend = (restrictedPercent * amount) / 100;
+            uint maximumSpend = ((restrictedPercent <= 100 ? 100 - restrictedPercent : 0) * amount) / 100;
 
             return maximumSpend < amount ? maximumSpend : amount;
         }
